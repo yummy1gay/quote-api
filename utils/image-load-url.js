@@ -67,4 +67,23 @@ function doRequest (url, filter, redirectCount) {
   })
 }
 
-module.exports = (url, filter = false) => doRequest(url, filter, 0)
+module.exports = (url, filter = false) => {
+  if (url.startsWith('data:')) {
+    return new Promise((resolve, reject) => {
+      try {
+        const [header, data] = url.split(',')
+        const isBase64 = header.includes('base64')
+        
+        if (isBase64) {
+          resolve(Buffer.from(data, 'base64'))
+        } else {
+          resolve(Buffer.from(decodeURIComponent(data), 'utf8'))
+        }
+      } catch (err) {
+        reject(new Error(`Invalid data URL: ${err.message}`))
+      }
+    })
+  }
+
+  return doRequest(url, filter, 0)
+}
