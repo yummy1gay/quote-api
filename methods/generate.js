@@ -219,7 +219,6 @@ module.exports = async (parm) => {
     canvasPicCtx.fillStyle = 'rgba(0, 0, 0, 0.3)'
     canvasPicCtx.font = `${8 * scale}px Noto Sans`
     canvasPicCtx.textAlign = 'right'
-    canvasPicCtx.fillText('@QuotLyBot', canvasPic.width - 25, canvasPic.height - 25)
 
     quoteImage = await sharp(canvasPic.toBuffer()).png({ lossless: true, force: true }).toBuffer()
   } else if (type === 'stories') {
@@ -264,7 +263,6 @@ module.exports = async (parm) => {
     canvasPicCtx.textAlign = 'center'
     canvasPicCtx.translate(70, canvasPic.height / 2)
     canvasPicCtx.rotate(-Math.PI / 2)
-    canvasPicCtx.fillText('@QuotLyBot', 0, 0)
 
     quoteImage = await sharp(canvasPic.toBuffer()).png({ lossless: true, force: true }).toBuffer()
   } else {
