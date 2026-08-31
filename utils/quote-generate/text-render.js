@@ -103,7 +103,7 @@ function renderText (layout, prepared, fontColor) {
 
     // Handle truncation ellipsis on last line
     if (lineIdx === lines.length - 1 && line.truncated) {
-      const ellipsis = '\u2026'
+      const ellipsis = '...'
       if (currentFillStyle !== fontColor) {
         ctx.fillStyle = fontColor
         currentFillStyle = fontColor

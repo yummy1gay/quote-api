@@ -299,7 +299,7 @@ function applyTruncation (line, prepared, maxWidth) {
   }
 
   const ctx = require('./text-prepare').getMeasureCtx()
-  const ellipsis = '\u2026'
+  const ellipsis = '...'
   // Set font to last segment's font so ellipsis is measured at the correct size
   const lastLayoutSeg = line.segments[line.segments.length - 1]
   if (lastLayoutSeg) {
@@ -320,11 +320,44 @@ function applyTruncation (line, prepared, maxWidth) {
     totalWidth += line.segments[s].width
   }
 
+  // Handle single long segment overflow via grapheme splitting
+  if (trimIndex === 0 && line.segments.length > 0) {
+    const firstLayoutSeg = line.segments[0]
+    const seg = prepared.segments[firstLayoutSeg.index]
+    if (seg && seg.kind === 'text' && prepared.computeGraphemeWidths) {
+      const gData = prepared.computeGraphemeWidths(seg)
+      if (gData) {
+        let fitCount = 0
+        let fitWidth = 0
+        for (let g = 0; g < gData.widths.length; g++) {
+          if (fitWidth + gData.widths[g] > targetWidth && fitCount > 0) break
+          fitWidth += gData.widths[g]
+          fitCount++
+        }
+        firstLayoutSeg.graphemeEnd = fitCount
+        firstLayoutSeg.width = fitWidth
+        totalWidth = fitWidth
+        trimIndex = 1
+      }
+    }
+  }
+
+  // Trim trailing space segments before appending ellipsis
+  while (trimIndex > 1) {
+    const prevSeg = prepared.segments[line.segments[trimIndex - 1].index]
+    if (prevSeg && prevSeg.kind === 'space') {
+      totalWidth -= line.segments[trimIndex - 1].width
+      trimIndex--
+    } else {
+      break
+    }
+  }
+
   line.segments.length = Math.max(1, trimIndex)
-  if (totalWidth === 0) {
+  if (totalWidth === 0 && line.segments.length > 0) {
     totalWidth = line.segments[0].width
   }
-  line.width = totalWidth
+  line.width = totalWidth + ellipsisWidth
   line.truncated = true
 }
 

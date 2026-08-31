@@ -206,15 +206,18 @@ class QuoteGenerate {
         const replyName = typeof message.replyMessage.name === 'string' ? message.replyMessage.name : String(message.replyMessage.name)
         const replyText = typeof message.replyMessage.text === 'string' ? message.replyMessage.text : String(message.replyMessage.text)
 
+        const normalizedReplyName = replyName.replace(/[\r\n]/g, ' ')
+        const normalizedReplyText = replyText.replace(/[\r\n]/g, ' ')
+
         const replyNameFontSize = 14 * scale
         const replyNameCanvas = await drawMultilineText(
-          replyName, 'bold', replyNameFontSize, replyNameColor,
+          normalizedReplyName, 'bold', replyNameFontSize, replyNameColor,
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
         const replyTextFontSize = 14 * scale
         const replyTextCanvas = await drawMultilineText(
-          replyText, message.replyMessage.entities || [],
+          normalizedReplyText, message.replyMessage.entities || [],
           replyTextFontSize, textColor,
           0, replyTextFontSize, width * 0.9, replyTextFontSize, emojiBrand, this.telegram
         )
