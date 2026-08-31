@@ -168,7 +168,7 @@ function drawFileDisc (d, accent) {
   ctx.beginPath()
   ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2)
   ctx.fill()
-  const size = d * 0.5
+  const size = d * 0.64
   paintIcon(ctx, 'file', (d - size) / 2, (d - size) / 2, size, '#fff', () => {
     // Page-with-folded-corner fallback
     const w = d * 0.34
@@ -333,7 +333,8 @@ function assembleRow (disc, title, meta, scale, maxWidth) {
   const gap = s(ROW.fileGap)
   const textW = Math.max(title.width, meta ? meta.width : 0)
   let w = Math.ceil(disc.width + gap + textW)
-  if (maxWidth && w > maxWidth) w = Math.ceil(maxWidth)
+  // Telegram reserves the full available file row even for short names.
+  if (maxWidth) w = Math.ceil(maxWidth)
   const textsH = title.height + (meta ? s(ROW.lineGap) + meta.height : 0)
   const h = Math.max(disc.height, textsH)
 
@@ -435,7 +436,7 @@ function drawReplyIcon (name, size, color) {
   if (!ICON_FILES[name]) return null
   const canvas = createCanvas(size, size)
   const ctx = canvas.getContext('2d')
-  const glyphSize = name === 'play' ? size * 0.72 : size * 0.78
+  const glyphSize = name === 'play' ? size * 0.8 : size * 0.92
   const dx = name === 'play' ? size * 0.04 : 0
   paintIcon(
     ctx,

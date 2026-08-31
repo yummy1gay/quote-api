@@ -171,18 +171,22 @@ function colorIntToHex (value) {
 
 function resolvePeerColor (peerColor, dark, fallback) {
   if (!peerColor || typeof peerColor !== 'object') {
-    return { main: fallback, secondary: null, tertiary: null, backgroundEmojiId: null, collectible: false }
+    return { main: fallback, outlineColors: [fallback], backgroundEmojiId: null, giftEmojiId: null, collectible: false }
   }
 
   const isCollectible = peerColor.type === 'collectible' || peerColor._ === 'PeerColorCollectible'
   let palette
   let main
+  let outlineColors
   if (isCollectible) {
     const darkPalette = Array.isArray(peerColor.dark_colors) ? peerColor.dark_colors : []
     palette = dark && darkPalette.length ? darkPalette : (peerColor.colors || [])
     main = colorIntToHex(dark && peerColor.dark_accent_color != null
       ? peerColor.dark_accent_color
       : peerColor.accent_color)
+    // Telegram Desktop uses the collectible strip verbatim for the outline.
+    // accent_color is the name/background color, not the first strip color.
+    outlineColors = palette.slice(0, 3).map(colorIntToHex).filter(Boolean)
   } else {
     const darkPalette = Array.isArray(peerColor.dark_colors) ? peerColor.dark_colors : []
     palette = dark && darkPalette.length ? darkPalette : (peerColor.colors || [])
@@ -191,13 +195,14 @@ function resolvePeerColor (peerColor, dark, fallback) {
     }
     main = colorIntToHex(palette[0]) || fallback
     palette = palette.slice(1)
+    outlineColors = [main, ...palette.slice(0, 2).map(colorIntToHex)].filter(Boolean)
   }
 
   return {
     main: main || fallback,
-    secondary: colorIntToHex(palette[0]),
-    tertiary: colorIntToHex(palette[1]),
+    outlineColors: outlineColors.length ? outlineColors : [main || fallback],
     backgroundEmojiId: peerColor.background_emoji_id != null ? String(peerColor.background_emoji_id) : null,
+    giftEmojiId: peerColor.gift_emoji_id != null ? String(peerColor.gift_emoji_id) : null,
     collectible: isCollectible
   }
 }

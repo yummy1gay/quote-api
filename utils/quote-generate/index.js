@@ -223,19 +223,25 @@ class QuoteGenerate {
           replyData = {
             name: replyNameCanvas,
             nameColor: replyNameColor,
-            colors: [resolvedReplyColor.main, resolvedReplyColor.secondary, resolvedReplyColor.tertiary].filter(Boolean),
+            colors: resolvedReplyColor.outlineColors,
             collectible: resolvedReplyColor.collectible,
             text: replyTextCanvas
           }
 
           const replyIconName = { document: 'file', file: 'file', audio: 'note', music: 'note', video: 'play' }[message.replyMessage.icon]
-          if (replyIconName) replyData.icon = drawReplyIcon(replyIconName, replyTextFontSize, replyNameColor)
+          if (replyIconName) replyData.icon = drawReplyIcon(replyIconName, 16 * scale, replyNameColor)
 
-          if (resolvedReplyColor.backgroundEmojiId) {
-            replyData.backgroundEmoji = await loadCustomEmojiImage(
-              resolvedReplyColor.backgroundEmojiId,
-              this.telegram
-            )
+          if (resolvedReplyColor.backgroundEmojiId || resolvedReplyColor.giftEmojiId) {
+            const [backgroundEmoji, giftEmoji] = await Promise.all([
+              resolvedReplyColor.backgroundEmojiId
+                ? loadCustomEmojiImage(resolvedReplyColor.backgroundEmojiId, this.telegram)
+                : null,
+              resolvedReplyColor.giftEmojiId
+                ? loadCustomEmojiImage(resolvedReplyColor.giftEmojiId, this.telegram)
+                : null
+            ])
+            replyData.backgroundEmoji = backgroundEmoji
+            replyData.giftEmoji = giftEmoji
           }
 
           // Thumbnail of the replied media (photo/video/sticker…), like the

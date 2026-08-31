@@ -121,10 +121,14 @@ function drawQuote (options) {
       })
       : replyTexts
     replyNode = accentBlock(s, reply.colors || reply.nameColor, {
+      fillColor: reply.nameColor,
       backgroundEmoji: reply.backgroundEmoji,
-      emptyCorner: reply.collectible,
+      giftEmoji: reply.giftEmoji,
       children: [inner]
     })
+    // Reply headers occupy the message's full content width, regardless of
+    // how short their own name/text happens to be.
+    replyNode.stretch = true
   }
 
   // Media-only bubbles (photo with no caption/name/reply) are pure media:
@@ -315,10 +319,10 @@ function coverSquare (img) {
 // color, solid accent bar on the left, optional solid ❝ in the top-right
 // corner. Used for the reply preview (accent = replied sender's color) and
 // the partial-quote body (accent = quoted sender's color).
-function accentBlock (s, accent, { icon = false, backgroundEmoji = null, emptyCorner = false, children }) {
+function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmoji = null, giftEmoji = null, children }) {
   const b = SP.block
   const colors = (Array.isArray(accent) ? accent : [accent]).filter(Boolean)
-  const primary = colors[0] || '#fff'
+  const primary = fillColor || colors[0] || '#fff'
   return box({
     gap: s(b.gap),
     pad: { t: s(b.padY), r: s(icon ? b.padRIcon : b.padR), b: s(b.padY), l: s(b.padL) },
@@ -328,15 +332,15 @@ function accentBlock (s, accent, { icon = false, backgroundEmoji = null, emptyCo
       ctx.globalAlpha = b.tint
       ctx.drawImage(solid, n.x, n.y)
       ctx.restore()
-      paintAccentBar(ctx, n, colors, s(b.bar), s(6))
-      if (backgroundEmoji) paintBackgroundEmoji(ctx, n, backgroundEmoji, primary, emptyCorner, s)
+      paintAccentBar(ctx, n, colors, s(b.bar), s(2))
+      if (backgroundEmoji || giftEmoji) paintBackgroundEmoji(ctx, n, backgroundEmoji, giftEmoji, primary, s)
       if (icon) ctx.drawImage(drawQuoteIcon(s(b.icon), primary, 1), n.x + n.w - s(b.icon) - s(b.iconInset), n.y + s(b.iconInset))
     },
     children
   })
 }
 
-function paintAccentBar (ctx, n, colors, width, dashHeight) {
+function paintAccentBar (ctx, n, colors, width, shift) {
   ctx.save()
   ctx.beginPath()
   roundedRectPath(ctx, n.x, n.y, width, n.h, width / 2)
@@ -345,39 +349,56 @@ function paintAccentBar (ctx, n, colors, width, dashHeight) {
     ctx.fillStyle = colors[0] || '#fff'
     ctx.fillRect(n.x, n.y, width, n.h)
   } else {
-    for (let y = -dashHeight; y < n.h + dashHeight; y += dashHeight) {
-      const index = Math.abs(Math.floor(y / dashHeight)) % colors.length
-      ctx.fillStyle = colors[index]
+    // Exact QuotePaint outline tile from Telegram Desktop/lib_ui.
+    const hasThird = colors.length > 2
+    const tileH = width * (hasThird ? 6 : 4)
+    ctx.fillStyle = colors[0]
+    ctx.fillRect(n.x, n.y, width, n.h)
+    for (let y = -shift; y < n.h + tileH; y += tileH) {
+      ctx.fillStyle = colors[hasThird ? 2 : 1]
       ctx.beginPath()
-      ctx.moveTo(n.x, n.y + y + dashHeight * 0.25)
-      ctx.lineTo(n.x + width, n.y + y)
-      ctx.lineTo(n.x + width, n.y + y + dashHeight)
-      ctx.lineTo(n.x, n.y + y + dashHeight * 1.25)
+      ctx.moveTo(n.x + width, n.y + y + width)
+      ctx.lineTo(n.x + width, n.y + y + width * (hasThird ? 4 : 3))
+      ctx.lineTo(n.x, n.y + y + width * (hasThird ? 5 : 4))
+      ctx.lineTo(n.x, n.y + y + width * 2)
       ctx.closePath()
       ctx.fill()
+      if (hasThird) {
+        ctx.fillStyle = colors[1]
+        ctx.beginPath()
+        ctx.moveTo(n.x + width, n.y + y + width * 3)
+        ctx.lineTo(n.x + width, n.y + y + width * 5)
+        ctx.lineTo(n.x, n.y + y + width * 6)
+        ctx.lineTo(n.x, n.y + y + width * 4)
+        ctx.closePath()
+        ctx.fill()
+      }
     }
   }
   ctx.restore()
 }
 
-function paintBackgroundEmoji (ctx, n, image, color, emptyCorner, s) {
+function paintBackgroundEmoji (ctx, n, image, giftImage, color, s) {
+  // right offset, y, size, opacity — copied from FillBackgroundEmoji.
   const placements = [
-    [55, 47, 58], [180, 13, 38], [133, 74, 46], [262, 67, 54], [364, 26, 58]
+    [28, 4, 20, 0.32], [51, 15, 16, 0.32], [64, -2, 12, 0.28],
+    [87, 11, 16, 0.24], [125, -2, 20, 0.16], [28, 31, 16, 0.24],
+    [72, 33, 20, 0.2], [46, 52, 16, 0.24], [24, 55, 20, 0.18]
   ]
   ctx.save()
   ctx.beginPath()
   roundedRectPath(ctx, n.x, n.y, n.w, n.h, s(SP.block.radius))
   ctx.clip()
   for (let i = 0; i < placements.length; i++) {
-    if (emptyCorner && i === 0) continue
-    const [px, py, rawSize] = placements[i]
-    const size = s(rawSize / 3)
-    const x = n.x + n.w - s(px / 3) - size / 2
-    const y = n.y + s(py / 3) - size / 2
-    const alphaFraction = Math.min(1, s(px / 3) / Math.min(s(500), n.w))
+    const [right, py, rawSize, opacity] = placements[i]
+    const isGift = i === 0 && giftImage
+    if (!isGift && !image) continue
+    const size = s(rawSize)
+    const x = n.x + n.w - s(right)
+    const y = n.y + s(py)
     ctx.save()
-    ctx.globalAlpha = 0.3 * (1 - alphaFraction)
-    ctx.drawImage(tintImage(image, color, size), x, y, size, size)
+    ctx.globalAlpha = isGift ? 1 : opacity
+    ctx.drawImage(isGift ? giftImage : tintImage(image, color, size), x, y, size, size)
     ctx.restore()
   }
   ctx.restore()
