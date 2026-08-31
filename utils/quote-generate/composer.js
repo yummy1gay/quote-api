@@ -70,7 +70,7 @@ function drawQuote (options) {
   // ---- Leaves -------------------------------------------------------------
 
   let headerNode = null
-  if (nameCanvas) {
+  if (nameCanvas || viaBot) {
     let tagLeaf = null
     if (senderTag) {
       tagLeaf = leaf(drawLabel(senderTag, s(13), background.textColor || '#fff', { alpha: 0.45 }))
@@ -81,10 +81,10 @@ function drawQuote (options) {
     let nameMax = s(SP.maxHeader)
     if (viaLeaf) nameMax -= viaLeaf.w + s(6)
     if (tagLeaf) nameMax -= tagLeaf.w + s(SP.headerGap)
-    const nameLeaf = leaf(nameCanvas, { maxW: Math.max(s(40), nameMax) })
-    const nameSide = viaLeaf
+    const nameLeaf = nameCanvas ? leaf(nameCanvas, { maxW: Math.max(s(40), nameMax) }) : null
+    const nameSide = nameLeaf && viaLeaf
       ? box({ dir: 'row', align: 'center', gap: s(6), children: [nameLeaf, viaLeaf] })
-      : nameLeaf
+      : nameLeaf || viaLeaf
     headerNode = tagLeaf
       ? box({ dir: 'row', justify: 'between', align: 'center', gap: s(SP.headerGap), stretch: true, children: [nameSide, tagLeaf] })
       : nameSide
@@ -122,7 +122,7 @@ function drawQuote (options) {
 
   // Media-only bubbles (photo with no caption/name/reply) are pure media:
   // the photo IS the bubble, rounded with the bubble radius.
-  const mediaOnly = !!mediaCanvas && !nameCanvas && !text && !reply && !forwardLabel && !attachment
+  const mediaOnly = !!mediaCanvas && !headerNode && !text && !reply && !forwardLabel && !attachment
 
   // Grouped bubbles flatten the left corners that face their neighbours.
   const R = s(SP.radius)
@@ -141,7 +141,7 @@ function drawQuote (options) {
   const hasCaption = Boolean(text) || (Array.isArray(textBlocks) && textBlocks.length > 0) || Boolean(attachment)
   const flushable = !!mediaCanvas && !mediaOnly && !isSticker && !isRound
   const flushBottom = flushable && !hasCaption
-  const flushTop = flushable && !nameCanvas && !(isForward && forwardLabel) && !reply
+  const flushTop = flushable && !headerNode && !(isForward && forwardLabel) && !reply
 
   let mediaNode = null
   if (mediaCanvas) {
@@ -245,12 +245,12 @@ function drawQuote (options) {
 
   let root
   if (isSticker) {
-    // Sticker: no bubble; an optional dark overlay chip holds the reply.
-    const chip = replyNode
+    // Sticker: no bubble; an optional dark overlay chip holds metadata/reply.
+    const chip = headerNode || forwardNode || replyNode
       ? box({
         pad: bubblePad,
         bg: (ctx, n) => ctx.drawImage(drawRoundRect('rgba(0, 0, 0, 0.5)', n.w, n.h, s(SP.radius), 0), n.x, n.y),
-        children: [replyNode]
+        children: [headerNode, forwardNode, replyNode]
       })
       : null
     root = box({ dir: 'col', gap: s(SP.gap), children: [chip, mediaNode] })

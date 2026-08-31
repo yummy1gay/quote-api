@@ -101,6 +101,26 @@ async function main () {
   const chip = px(q, mx + 6 + 4, my + 100 - 6 - 6)
   assert.ok(chip.r < 200 && chip.g < 80, `chip backdrop missing, got ${JSON.stringify(chip)}`)
 
+  // 7. via @bot remains visible without a sender name, including stickers.
+  const via = createCanvas(90, 20)
+  via.getContext('2d').fillStyle = '#00ff00'
+  via.getContext('2d').fillRect(0, 0, via.width, via.height)
+  const sticker = createCanvas(100, 100)
+  sticker.getContext('2d').fillStyle = '#0088ff'
+  sticker.getContext('2d').fillRect(0, 0, sticker.width, sticker.height)
+  const stickerPlain = drawQuote({
+    scale: 1,
+    background: { colorOne: '#1b1429', colorTwo: '#1b1429', textColor: '#fff' },
+    media: { canvas: sticker, type: 'sticker', maxSize: 100 }
+  })
+  const stickerVia = drawQuote({
+    scale: 1,
+    background: { colorOne: '#1b1429', colorTwo: '#1b1429', textColor: '#fff' },
+    media: { canvas: sticker, type: 'sticker', maxSize: 100 },
+    viaBot: via
+  })
+  assert.ok(stickerVia.height > stickerPlain.height, 'via @bot chip must render above sticker media without a name')
+
   console.log('OK: attachment assertions passed')
   console.log(`  voice ${voice.width}x${voice.height}, doc ${doc.width}x${doc.height}, audio ${audio.width}x${audio.height}`)
   console.log(`  badge pixels: center=${JSON.stringify(center)} ring=${JSON.stringify(ring)}`)
