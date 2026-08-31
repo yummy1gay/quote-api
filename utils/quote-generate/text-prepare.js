@@ -211,21 +211,26 @@ async function loadCustomEmojis (customEmojiIds, telegram, customEmojiFiles) {
       continue
     }
     if (customEmojiLoadingPromises.has(id)) {
-      const image = await customEmojiLoadingPromises.get(id)
-      if (image) {
-        result[id] = image
+      const customEmoji = await customEmojiLoadingPromises.get(id)
+      if (customEmoji) {
+        result[id] = customEmoji
         continue
       }
     }
     const file = findCustomEmojiFile(customEmojiFiles, id)
     if (file && file.url) {
-      const loading = decodeCustomEmoji(file.url)
+      const loading = decodeCustomEmoji(file.url).then(image => image
+        ? {
+            image,
+            usesTextColor: Boolean(file.text_color || file.needs_repainting)
+          }
+        : null)
       customEmojiLoadingPromises.set(id, loading)
-      const image = await loading
+      const customEmoji = await loading
       customEmojiLoadingPromises.delete(id)
-      if (image) {
-        customEmojiImageCache.set(id, image)
-        result[id] = image
+      if (customEmoji) {
+        customEmojiImageCache.set(id, customEmoji)
+        result[id] = customEmoji
         continue
       }
     }
@@ -249,8 +254,12 @@ async function loadCustomEmojis (customEmojiIds, telegram, customEmojiFiles) {
     if (!fileLink) return
     const image = await decodeCustomEmoji(String(fileLink))
     if (!image) return
-    customEmojiImageCache.set(id, image)
-    result[id] = image
+    const customEmoji = {
+      image,
+      usesTextColor: Boolean(sticker.needs_repainting || sticker.text_color)
+    }
+    customEmojiImageCache.set(id, customEmoji)
+    result[id] = customEmoji
   })
 
   await Promise.all(promises).catch(() => {})
@@ -324,11 +333,13 @@ function pushSegment (segments, styledChars, start, end, fontSize, emojiSize, em
   let emojiImage = null
   const emojiCode = first.emoji ? first.emoji.code : null
   const customEmojiId = first.customEmojiId || null
+  const customEmoji = customEmojiId ? customEmojiMap[customEmojiId] : null
+  const customEmojiUsesTextColor = Boolean(customEmoji && customEmoji.usesTextColor)
   const inlineButtonImage = first.inlineButtonImage || null
 
   if (first.emoji || customEmojiId) {
-    if (customEmojiId && customEmojiMap[customEmojiId]) {
-      emojiImage = customEmojiMap[customEmojiId]
+    if (customEmoji && customEmoji.image) {
+      emojiImage = customEmoji.image
     } else {
       emojiImage = first.emoji ? (emojiMap.get(first.emoji.code) || null) : null
     }
@@ -343,6 +354,7 @@ function pushSegment (segments, styledChars, start, end, fontSize, emojiSize, em
     emojiImage,
     emojiCode,
     customEmojiId,
+    customEmojiUsesTextColor,
     inlineButtonImage,
     width: 0 // measured later
   })

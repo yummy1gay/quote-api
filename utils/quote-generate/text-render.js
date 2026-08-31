@@ -5,6 +5,16 @@
 const { createCanvas } = require('canvas')
 const { hexToRgb, normalizeColor } = require('./color')
 
+function colorizeEmoji (image, color, size) {
+  const canvas = createCanvas(Math.max(1, Math.ceil(size)), Math.max(1, Math.ceil(size)))
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+  ctx.globalCompositeOperation = 'source-in'
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  return canvas
+}
+
 /**
  * Render laid-out text to a canvas.
  */
@@ -24,6 +34,7 @@ function renderText (layout, prepared, fontColor) {
 
   let currentFont = null
   let currentFillStyle = null
+  const colorizedEmojiCache = new Map()
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]
@@ -65,9 +76,17 @@ function renderText (layout, prepared, fontColor) {
         const top = drawY - prepared.ascent + (lineBoxHeight - seg.inlineButtonImage.height) / 2
         ctx.drawImage(seg.inlineButtonImage, drawX, top)
       } else if (seg.kind === 'emoji' && seg.emojiImage) {
+        let emojiImage = seg.emojiImage
+        if (seg.customEmojiUsesTextColor) {
+          const cacheKey = `${seg.customEmojiId}:${fontColor}:${emojiSize}`
+          if (!colorizedEmojiCache.has(cacheKey)) {
+            colorizedEmojiCache.set(cacheKey, colorizeEmoji(seg.emojiImage, fontColor, emojiSize))
+          }
+          emojiImage = colorizedEmojiCache.get(cacheKey)
+        }
         // Draw emoji image at consistent size
         ctx.drawImage(
-          seg.emojiImage,
+          emojiImage,
           drawX,
           drawY - fontSize + (fontSize * 0.15),
           emojiSize,

@@ -11,13 +11,19 @@ const typeOf = (value) => String(value && value._ ? value._ : '')
   .replace(/^Text/, '')
   .toLowerCase()
 const utf16Length = (value) => String(value).length
+const cloneEntities = (entities) => entities.map(entity => ({ ...entity }))
 
 function richText (node, inherited = []) {
   if (!node) return { text: '', entities: [] }
-  if (typeof node === 'string') return { text: node, entities: inherited }
+  if (typeof node === 'string') return { text: node, entities: cloneEntities(inherited) }
   const type = typeOf(node)
   if (type === 'empty') return { text: '', entities: [] }
-  if (type === 'plain') return { text: node.text || '', entities: inherited }
+  if (type === 'plain') {
+    return {
+      text: node.text || '',
+      entities: cloneEntities(inherited)
+    }
+  }
   if (type === 'concat') {
     const result = { text: '', entities: [] }
     for (const child of node.texts || []) {
@@ -32,7 +38,7 @@ function richText (node, inherited = []) {
     const source = node.source || ''
     return { text: source, entities: inherited.concat([{ type: 'code', offset: 0, length: utf16Length(source) }]) }
   }
-  if (type === 'image') return { text: '[image]', entities: inherited }
+  if (type === 'image') return { text: '[image]', entities: cloneEntities(inherited) }
   if (type === 'customemoji') {
     const text = node.alt || '\uFFFC'
     return {
@@ -61,7 +67,10 @@ function richText (node, inherited = []) {
   }
   if (type === 'date') {
     const date = new Date(Number(node.date || 0) * 1000)
-    return { text: Number.isNaN(date.valueOf()) ? '' : date.toLocaleString('en-GB'), entities: inherited }
+    return {
+      text: Number.isNaN(date.valueOf()) ? '' : date.toLocaleString('en-GB'),
+      entities: cloneEntities(inherited)
+    }
   }
   if (type === 'diff') {
     const oldValue = richText(node.old_text, inherited)
@@ -376,21 +385,28 @@ async function drawCaption (caption, context) {
 
 async function renderDetails (block, context, depth) {
   const s = context.scale
-  const innerWidth = context.width - 22 * s
+  const horizontalPadding = 11 * s
+  const headerTop = 4 * s
+  const headerBottom = 4 * s
+  const bodyTop = 4 * s
+  const bodyBottom = 6 * s
+  const iconSize = 14 * s
+  const iconSkip = 8 * s
+  const innerWidth = Math.max(1, context.width - horizontalPadding * 2)
   const title = await drawText(
     block.title,
     context.font,
     context.color,
-    innerWidth - 20 * s,
+    Math.max(1, innerWidth - iconSize - iconSkip),
     context.height,
     context.emojiBrand,
     context.telegram,
-    'bold',
+    null,
     context.files,
     context.accent,
     context.scale
   )
-  const icon = createCanvas(14 * s, 14 * s)
+  const icon = createCanvas(iconSize, iconSize)
   const iconContext = icon.getContext('2d')
   iconContext.strokeStyle = context.muted
   iconContext.lineWidth = Math.max(1, 1.5 * s)
@@ -407,17 +423,23 @@ async function renderDetails (block, context, depth) {
     iconContext.lineTo(5 * s, 11 * s)
   }
   iconContext.stroke()
-  const header = stackRow(icon, title, 8 * s)
+  const header = stackRow(icon, title, iconSkip)
   const body = block.open
     ? await renderBlocks(block.blocks, { ...context, width: innerWidth }, depth + 1)
     : null
-  return decorate(stack([header, body], 8 * s), {
-    fill: context.tint,
-    stroke: context.border,
-    lineWidth: Math.max(1, s),
-    pad: 10 * s,
-    radius: 8 * s
-  })
+  const headerHeight = headerTop + Math.max(header ? header.height : 0, iconSize) + headerBottom
+  const bodyHeight = body ? bodyTop + body.height + bodyBottom : 0
+  const dividerHeight = Math.max(1, Math.round(s))
+  const out = createCanvas(
+    Math.max(1, Math.ceil(context.width)),
+    Math.max(1, Math.ceil(headerHeight + bodyHeight + dividerHeight))
+  )
+  const outContext = out.getContext('2d')
+  if (header) outContext.drawImage(header, horizontalPadding, headerTop)
+  if (body) outContext.drawImage(body, horizontalPadding, headerHeight + bodyTop)
+  outContext.fillStyle = context.divider
+  outContext.fillRect(0, out.height - dividerHeight, out.width, dividerHeight)
+  return out
 }
 
 async function renderMediaPlaceholder (label, context) {
@@ -1008,15 +1030,54 @@ async function renderBlock (block, context, depth = 0) {
     const rendered = []
     let index = Number(block.start || 1)
     for (const item of block.items || []) {
-      const marker = type === 'list'
-        ? (item.checked == null ? '•' : (item.checked ? '☑' : '☐'))
-        : `${item.num || index++}.`
-      const valueWidth = context.width - 36 * s
+      const task = type === 'list' && item.checkbox === true
+      const marker = type === 'orderedlist' ? `${item.num || index++}.` : null
+      const markerWidth = 22 * s
+      const markerSkip = 8 * s
+      const valueWidth = Math.max(1, context.width - markerWidth - markerSkip)
       const value = item.text
         ? await text(item.text, context.font, context.color, valueWidth)
         : await renderBlocks(item.blocks, { ...context, width: valueWidth }, depth + 1)
-      const markerCanvas = await text({ _: 'TextPlain', text: marker }, context.font, context.accent, 28 * s, 'bold')
-      rendered.push(stackRow(markerCanvas, value, 8 * s, 'top'))
+      let markerCanvas
+      if (marker) {
+        markerCanvas = await text(
+          { _: 'TextPlain', text: marker },
+          context.font,
+          context.color,
+          markerWidth
+        )
+      } else {
+        const markerHeight = Math.max(context.font * 1.2, 16 * s)
+        markerCanvas = createCanvas(Math.max(1, Math.ceil(markerWidth)), Math.max(1, Math.ceil(markerHeight)))
+        const markerContext = markerCanvas.getContext('2d')
+        markerContext.strokeStyle = context.muted
+        markerContext.fillStyle = context.color
+        markerContext.lineWidth = Math.max(1, s)
+        if (task) {
+          const size = 14 * s
+          const x = (markerWidth - size) / 2
+          const y = (markerHeight - size) / 2
+          markerContext.beginPath()
+          roundedRect(markerContext, x, y, size, size, 2 * s)
+          markerContext.stroke()
+          if (item.checked) {
+            markerContext.strokeStyle = context.color
+            markerContext.lineWidth = Math.max(1.5, 1.5 * s)
+            markerContext.lineCap = 'round'
+            markerContext.lineJoin = 'round'
+            markerContext.beginPath()
+            markerContext.moveTo(x + 3 * s, y + 7 * s)
+            markerContext.lineTo(x + 6 * s, y + 10 * s)
+            markerContext.lineTo(x + 11 * s, y + 4 * s)
+            markerContext.stroke()
+          }
+        } else {
+          markerContext.beginPath()
+          markerContext.arc(markerWidth / 2, markerHeight / 2, 2 * s, 0, Math.PI * 2)
+          markerContext.fill()
+        }
+      }
+      rendered.push(stackRow(markerCanvas, value, markerSkip, 'top'))
     }
     return stack(rendered, 7 * s)
   }
@@ -1140,6 +1201,7 @@ async function renderRichMessage (rich, options) {
     accent: options.accent,
     tint: withAlpha(options.accent, 0.12),
     border: withAlpha(options.accent, 0.36),
+    divider: withAlpha(options.muted, options.dark ? 0.42 : 0.32),
     code: options.dark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.07)',
     width: Math.max(1, Math.floor(options.width)),
     height: options.height,
