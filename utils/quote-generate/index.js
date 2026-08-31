@@ -11,6 +11,7 @@ const { drawMultilineText } = require('./text-renderer')
 const { drawAvatar } = require('./avatar')
 const { downloadMediaImage } = require('./media')
 const { drawQuote } = require('./composer')
+const { renderRichMessage } = require('./rich-message')
 const { drawLabel } = require('./canvas-utils')
 const { loadIcons, loadCustomEmojiImage, drawVoiceRow, drawDocumentRow, drawAudioRow, drawReplyIcon, formatDuration } = require('./attachments')
 const { ColorContrast, lightOrDark, colorLuminance, resolvePeerColor } = require('./color')
@@ -136,6 +137,25 @@ class QuoteGenerate {
 
     const fontSize = 24 * scale
     let textColor = backStyle === 'light' ? '#000' : '#fff'
+
+    let richContent = null
+    if (message.richMessage) {
+      try {
+        richContent = await renderRichMessage(message.richMessage, {
+          scale,
+          width: width * 2 / 3,
+          height: height - fontSize,
+          color: textColor,
+          muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
+          accent: nameColor,
+          dark: backStyle === 'dark',
+          emojiBrand,
+          telegram: this.telegram
+        })
+      } catch (error) {
+        console.error('Failed to render rich message:', error.message, error.stack)
+      }
+    }
 
     let textCanvas
     let textBlocks = null
@@ -365,7 +385,7 @@ class QuoteGenerate {
     }
 
     // Nothing to render — skip this message
-    if (!textCanvas && !nameCanvas && !mediaCanvas && !replyData && !attachment) {
+    if (!textCanvas && !nameCanvas && !mediaCanvas && !replyData && !attachment && !richContent) {
       return null
     }
 
@@ -379,6 +399,7 @@ class QuoteGenerate {
       textBlocks,
       media: mediaCanvas ? { canvas: mediaCanvas, type: mediaType, maxSize: maxMediaSize, badge: mediaBadge } : null,
       attachment: attachment ? { canvas: attachment } : null,
+      richContent,
       isForward,
       forwardLabel,
       nameColor,

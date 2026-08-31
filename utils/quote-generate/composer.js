@@ -50,6 +50,7 @@ function drawQuote (options) {
     textBlocks, // [{ canvas, quote: bool }] — text split around blockquote entities
     media,
     attachment, // pre-rendered in-bubble row canvas (voice/document/audio)
+    richContent, // recursively rendered Telegram RichMessage page
     isForward,
     forwardLabel,
     nameColor,
@@ -135,7 +136,7 @@ function drawQuote (options) {
 
   // Media-only bubbles (photo with no caption/name/reply) are pure media:
   // the photo IS the bubble, rounded with the bubble radius.
-  const mediaOnly = !!mediaCanvas && !headerNode && !text && !reply && !forwardLabel && !attachment
+  const mediaOnly = !!mediaCanvas && !headerNode && !text && !reply && !forwardLabel && !attachment && !richContent
 
   // Grouped bubbles flatten the left corners that face their neighbours.
   const R = s(SP.radius)
@@ -151,7 +152,7 @@ function drawQuote (options) {
   // below (or no header above) the bubble padding on that side collapses and
   // the media corners inherit the bubble's own radii.
   const isRound = mediaType === 'video_note' // round video — circular mask
-  const hasCaption = Boolean(text) || (Array.isArray(textBlocks) && textBlocks.length > 0) || Boolean(attachment)
+  const hasCaption = Boolean(text) || (Array.isArray(textBlocks) && textBlocks.length > 0) || Boolean(attachment) || Boolean(richContent)
   const flushable = !!mediaCanvas && !mediaOnly && !isSticker && !isRound
   const flushBottom = flushable && !hasCaption
   const flushTop = flushable && !headerNode && !(isForward && forwardLabel) && !reply
@@ -209,6 +210,7 @@ function drawQuote (options) {
   // Voice/document/audio rows sit in the media slot but behave like text:
   // padded by the bubble, never flush.
   const attachmentNode = attachment ? leaf(attachment.canvas) : null
+  const richNode = richContent ? leaf(richContent) : null
 
   let textNode = null
   if (Array.isArray(textBlocks) && textBlocks.length > 0 && !isQuote) {
@@ -275,7 +277,7 @@ function drawQuote (options) {
       pad: mediaOnly ? 0 : bubblePad,
       minW: mediaOnly ? 0 : s(SP.minWidth),
       bg: bubbleBg,
-      children: [headerNode, forwardNode, replyNode, mediaNode, attachmentNode, textNode]
+      children: [headerNode, forwardNode, replyNode, mediaNode, attachmentNode, richNode, textNode]
     })
   }
 
