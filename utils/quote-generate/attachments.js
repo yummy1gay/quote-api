@@ -9,20 +9,20 @@ const path = require('path')
 const { createCanvas, loadImage } = require('canvas')
 const sharp = require('sharp')
 const { drawLabel } = require('./canvas-utils')
+const loadImageFromUrl = require('../image-load-url')
 
-// Official Material Design icons (Apache-2.0), vendored as-is from
-// @material-design-icons/svg into assets/icons/. Rasterized once at 256px
-// white via sharp and drawn scaled; the geometric fallbacks below only kick
-// in if SVG rasterization is unavailable.
+// The same SF Symbols used by Telegram-iOS, exported from the local symbols
+// catalogue. They are rasterized once and tinted at paint time.
 const ICON_FILES = {
-  play: 'play_arrow.svg',
-  file: 'insert_drive_file.svg',
-  note: 'music_note.svg'
+  play: 'play.fill.svg',
+  file: 'document.fill.svg',
+  note: 'music.note.svg'
 }
 const ICONS_DIR = path.resolve(__dirname, '../../assets/icons')
 
 let icons = null
 let iconsLoading = null
+const customEmojiCache = new Map()
 
 // Warm the white icon sprites (256px). Call (and await) once before any
 // drawVoiceRow/drawDocumentRow/drawAudioRow/paintMediaBadges usage.
@@ -36,7 +36,9 @@ async function loadIcons () {
         // The vendored icons carry no fill (default black) — paint them white.
         const white = svg.replace('<svg ', '<svg fill="#ffffff" ')
         out[key] = await loadImage(
-          await sharp(Buffer.from(white), { density: 256 / 24 * 72 }).resize(256, 256).png().toBuffer()
+          await sharp(Buffer.from(white), { density: 288 })
+            .resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+            .png().toBuffer()
         )
       }
       icons = out
@@ -51,19 +53,55 @@ async function loadIcons () {
 }
 
 // Draws a warmed white icon centered in a box, or runs the fallback painter.
-function paintIcon (ctx, name, x, y, size, fallback) {
+function paintIcon (ctx, name, x, y, size, color, fallback) {
   if (icons && icons[name]) {
+    const sprite = createCanvas(size, size)
+    const spriteCtx = sprite.getContext('2d')
+    spriteCtx.drawImage(icons[name], 0, 0, size, size)
+    spriteCtx.globalCompositeOperation = 'source-in'
+    spriteCtx.fillStyle = color
+    spriteCtx.fillRect(0, 0, size, size)
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(icons[name], x, y, size, size)
+    ctx.drawImage(sprite, x, y)
   } else {
     fallback()
   }
 }
 
+async function loadCustomEmojiImage (customEmojiId, telegram) {
+  const id = String(customEmojiId || '')
+  if (!id || !telegram) return null
+  if (!customEmojiCache.has(id)) {
+    const loading = (async () => {
+      const stickers = await telegram.callApi('getCustomEmojiStickers', {
+        custom_emoji_ids: [id]
+      }).catch(() => null)
+      const sticker = stickers && stickers[0]
+      if (!sticker) return null
+      const preview = sticker.thumbnail || sticker.thumb
+      const fileId = preview && preview.file_id
+        ? preview.file_id
+        : sticker.file_id
+      if (!fileId) return null
+      const fileLink = await telegram.getFileLink(fileId).catch(() => null)
+      if (!fileLink) return null
+      const data = await loadImageFromUrl(fileLink).catch(() => null)
+      if (!data) return null
+      const png = await sharp(data, { animated: false }).png().toBuffer().catch(() => null)
+      return png ? loadImage(png).catch(() => null) : null
+    })()
+    customEmojiCache.set(id, loading)
+    if (customEmojiCache.size > 128) customEmojiCache.delete(customEmojiCache.keys().next().value)
+  }
+  return customEmojiCache.get(id)
+}
+
 const ROW = {
-  disc: 40, // play/file/cover disc side
-  gap: 11, // disc → texts/waveform
+  disc: 44, // Telegram-iOS progressDiameter
+  voiceDisc: 40, // preserve the existing voice waveform geometry
+  gap: 11, // voice control → waveform spacing
+  fileGap: 8, // Telegram-iOS file control → text spacing
   title: 16, // first line (file name, track title)
   meta: 13, // second line (size, performer, duration)
   metaAlpha: 0.55,
@@ -105,8 +143,8 @@ function drawPlayDisc (d, accent) {
   ctx.beginPath()
   ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2)
   ctx.fill()
-  const size = d * 0.62
-  paintIcon(ctx, 'play', (d - size) / 2, (d - size) / 2, size, () => {
+  const size = d * 0.48
+  paintIcon(ctx, 'play', (d - size) / 2 + d * 0.035, (d - size) / 2, size, '#fff', () => {
     // Triangle fallback: optical center sits slightly right of geometric.
     const r = d * 0.22
     const cx = d * 0.54
@@ -130,8 +168,8 @@ function drawFileDisc (d, accent) {
   ctx.beginPath()
   ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2)
   ctx.fill()
-  const size = d * 0.55
-  paintIcon(ctx, 'file', (d - size) / 2, (d - size) / 2, size, () => {
+  const size = d * 0.5
+  paintIcon(ctx, 'file', (d - size) / 2, (d - size) / 2, size, '#fff', () => {
     // Page-with-folded-corner fallback
     const w = d * 0.34
     const h = d * 0.44
@@ -166,8 +204,8 @@ function drawNoteDisc (d, accent) {
   ctx.beginPath()
   ctx.arc(d / 2, d / 2, d / 2, 0, Math.PI * 2)
   ctx.fill()
-  const size = d * 0.55
-  paintIcon(ctx, 'note', (d - size) / 2, (d - size) / 2, size, () => {
+  const size = d * 0.5
+  paintIcon(ctx, 'note', (d - size) / 2, (d - size) / 2, size, '#fff', () => {
     // Geometric eighth-note fallback (no font dependency)
     ctx.fillStyle = '#fff'
     const headR = d * 0.09
@@ -209,7 +247,7 @@ function resampleWaveform (data, n) {
  */
 function drawVoiceRow (waveform, duration, accent, textColor, scale, maxWidth) {
   const s = (v) => v * scale
-  const d = s(ROW.disc)
+  const d = s(ROW.voiceDisc)
   const durLabel = drawLabel(formatDuration(duration), s(ROW.meta), textColor, { alpha: ROW.metaAlpha })
 
   const pitch = s(ROW.bar) + s(ROW.barGap)
@@ -292,7 +330,7 @@ function drawAudioRow (audio, accent, textColor, scale, maxWidth, thumb) {
 // [disc] + up to two text lines, vertically centered against the disc.
 function assembleRow (disc, title, meta, scale, maxWidth) {
   const s = (v) => v * scale
-  const gap = s(ROW.gap)
+  const gap = s(ROW.fileGap)
   const textW = Math.max(title.width, meta ? meta.width : 0)
   let w = Math.ceil(disc.width + gap + textW)
   if (maxWidth && w > maxWidth) w = Math.ceil(maxWidth)
@@ -358,8 +396,8 @@ function paintMediaBadges (ctx, x, y, w, h, badge, scale) {
     ctx.beginPath()
     ctx.arc(cx, cy, d / 2, 0, Math.PI * 2)
     ctx.fill()
-    const size = d * 0.62
-    paintIcon(ctx, 'play', cx - size / 2, cy - size / 2, size, () => {
+    const size = d * 0.48
+    paintIcon(ctx, 'play', cx - size / 2 + d * 0.035, cy - size / 2, size, '#fff', () => {
       const r = d * 0.24
       ctx.fillStyle = '#fff'
       ctx.beginPath()
@@ -393,11 +431,31 @@ function paintMediaBadges (ctx, x, y, w, h, badge, scale) {
   ctx.restore()
 }
 
+function drawReplyIcon (name, size, color) {
+  if (!ICON_FILES[name]) return null
+  const canvas = createCanvas(size, size)
+  const ctx = canvas.getContext('2d')
+  const glyphSize = name === 'play' ? size * 0.72 : size * 0.78
+  const dx = name === 'play' ? size * 0.04 : 0
+  paintIcon(
+    ctx,
+    name,
+    (size - glyphSize) / 2 + dx,
+    (size - glyphSize) / 2,
+    glyphSize,
+    color,
+    () => {}
+  )
+  return canvas
+}
+
 module.exports = {
   loadIcons,
+  loadCustomEmojiImage,
   drawVoiceRow,
   drawDocumentRow,
   drawAudioRow,
+  drawReplyIcon,
   paintMediaBadges,
   formatDuration,
   formatFileSize,

@@ -43,13 +43,14 @@ async function main () {
   const maxW = 600
   const wave = Array.from({ length: 50 }, (_, i) => (i * 11) % 32)
   const voice = drawVoiceRow(wave, 42, ACCENT, '#fff', scale, maxW)
+  const voiceD = ROW.voiceDisc * scale
   const d = ROW.disc * scale
-  assert.strictEqual(voice.height, d, `voice row height ${voice.height} != disc ${d}`)
+  assert.strictEqual(voice.height, voiceD, `voice row height ${voice.height} != disc ${voiceD}`)
   assert.ok(voice.width <= maxW, `voice row ${voice.width} > cap ${maxW}`)
-  assert.ok(isAccent(px(voice, d / 2, d / 2 - d * 0.3)), 'play disc must be accent')
+  assert.ok(isAccent(px(voice, voiceD / 2, voiceD / 2 - voiceD * 0.3)), 'play disc must be accent')
   // First bar column: bars start at d+gap; min height 4·s ensures ink at center.
-  const barX = d + ROW.gap * scale + (ROW.bar * scale) / 2
-  assert.ok(isAccent(px(voice, barX, d / 2)), 'first waveform bar must be accent')
+  const barX = voiceD + ROW.gap * scale + (ROW.bar * scale) / 2
+  assert.ok(isAccent(px(voice, barX, voiceD / 2)), 'first waveform bar must be accent')
 
   // 4. Document row height: max(disc, two metric text lines) — exact math.
   const titleH = Math.max(1, Math.ceil(fontMetrics(ROW.title * scale).ascent + fontMetrics(ROW.title * scale).descent))

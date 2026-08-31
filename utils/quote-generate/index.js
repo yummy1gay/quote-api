@@ -12,8 +12,8 @@ const { drawAvatar } = require('./avatar')
 const { downloadMediaImage } = require('./media')
 const { drawQuote } = require('./composer')
 const { drawLabel } = require('./canvas-utils')
-const { loadIcons, drawVoiceRow, drawDocumentRow, drawAudioRow, formatDuration } = require('./attachments')
-const { ColorContrast, lightOrDark, colorLuminance } = require('./color')
+const { loadIcons, loadCustomEmojiImage, drawVoiceRow, drawDocumentRow, drawAudioRow, drawReplyIcon, formatDuration } = require('./attachments')
+const { ColorContrast, lightOrDark, colorLuminance, resolvePeerColor } = require('./color')
 const { NAME_COLORS_LIGHT, NAME_COLORS_DARK } = require('./constants')
 
 async function loadFonts () {
@@ -70,11 +70,18 @@ class QuoteGenerate {
     if (message.from && message.from.id) nameIndex = Math.abs(message.from.id) % 7
 
     let nameColor = nameColorArray[nameIndex]
+    const rawSenderPeerColor = message.from && (message.from.peerColor || message.from.color)
+    const senderPeerColor = rawSenderPeerColor
+      ? resolvePeerColor(rawSenderPeerColor, backStyle === 'dark', nameColor)
+      : null
+    if (senderPeerColor) nameColor = senderPeerColor.main
 
-    const colorContrast = new ColorContrast()
-    const contrast = colorContrast.getContrastRatio(colorLuminance(backgroundColorOne, 0.55), nameColor)
-    if (contrast > 90 || contrast < 30) {
-      nameColor = colorContrast.adjustContrast(colorLuminance(backgroundColorTwo, 0.55), nameColor)
+    if (!senderPeerColor) {
+      const colorContrast = new ColorContrast()
+      const contrast = colorContrast.getContrastRatio(colorLuminance(backgroundColorOne, 0.55), nameColor)
+      if (contrast > 90 || contrast < 30) {
+        nameColor = colorContrast.adjustContrast(colorLuminance(backgroundColorTwo, 0.55), nameColor)
+      }
     }
 
     // Name is noticeably smaller than the message text (like Telegram), so
@@ -111,7 +118,7 @@ class QuoteGenerate {
         // emoji image is in the canvas — source-in would tint it into a
         // flat silhouette (emoji status or regular emoji in the name).
         const nameHasEmoji = emojiDb.searchFromText({ input: name, fixCodePoints: true }).length > 0
-        if (!message.from.emoji_status && !nameHasEmoji) {
+        if (!senderPeerColor && !message.from.emoji_status && !nameHasEmoji) {
           nameCanvas = gradientTint(nameCanvas, nameColor, colorLuminance(nameColor, 0.25))
         }
       } catch (error) {
@@ -186,7 +193,15 @@ class QuoteGenerate {
       try {
         const chatId = message.replyMessage.chatId || 0
         const replyNameIndex = Math.abs(chatId) % 7
-        const replyNameColor = nameColorArray[replyNameIndex]
+        const fallbackReplyColor = nameColorArray[replyNameIndex]
+        const replyPeerColor = message.replyMessage.peerColor || message.replyMessage.color ||
+          (message.replyMessage.from && (message.replyMessage.from.peerColor || message.replyMessage.from.color))
+        const resolvedReplyColor = resolvePeerColor(
+          replyPeerColor,
+          backStyle === 'dark',
+          fallbackReplyColor
+        )
+        const replyNameColor = resolvedReplyColor.main
 
         const replyName = typeof message.replyMessage.name === 'string' ? message.replyMessage.name : String(message.replyMessage.name)
         const replyText = typeof message.replyMessage.text === 'string' ? message.replyMessage.text : String(message.replyMessage.text)
@@ -197,7 +212,7 @@ class QuoteGenerate {
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
-        const replyTextFontSize = 15 * scale
+        const replyTextFontSize = 14 * scale
         const replyTextCanvas = await drawMultilineText(
           replyText, message.replyMessage.entities || [],
           replyTextFontSize, textColor,
@@ -205,14 +220,30 @@ class QuoteGenerate {
         )
 
         if (replyNameCanvas && replyTextCanvas) {
-          replyData = { name: replyNameCanvas, nameColor: replyNameColor, text: replyTextCanvas }
+          replyData = {
+            name: replyNameCanvas,
+            nameColor: replyNameColor,
+            colors: [resolvedReplyColor.main, resolvedReplyColor.secondary, resolvedReplyColor.tertiary].filter(Boolean),
+            collectible: resolvedReplyColor.collectible,
+            text: replyTextCanvas
+          }
+
+          const replyIconName = { document: 'file', file: 'file', audio: 'note', music: 'note', video: 'play' }[message.replyMessage.icon]
+          if (replyIconName) replyData.icon = drawReplyIcon(replyIconName, replyTextFontSize, replyNameColor)
+
+          if (resolvedReplyColor.backgroundEmojiId) {
+            replyData.backgroundEmoji = await loadCustomEmojiImage(
+              resolvedReplyColor.backgroundEmojiId,
+              this.telegram
+            )
+          }
 
           // Thumbnail of the replied media (photo/video/sticker…), like the
           // modern Telegram reply preview. Best-effort — silently skipped.
           const replyMedia = message.replyMessage.media
-          if (replyMedia && replyMedia.fileId) {
+          if (replyMedia && (replyMedia.fileId || replyMedia.url)) {
             try {
-              const fileUrl = await this.telegram.getFileLink(replyMedia.fileId)
+              const fileUrl = replyMedia.url || await this.telegram.getFileLink(replyMedia.fileId)
               const buffer = await loadImageFromUrl(fileUrl)
               replyData.thumb = await loadImage(buffer)
             } catch (error) {

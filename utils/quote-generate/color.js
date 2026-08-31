@@ -58,6 +58,7 @@ function rgbToHex ([r, g, b]) {
 
 const normalizeColorCache = new Map()
 const NORMALIZE_COLOR_CACHE_MAX = 1000
+const DEFAULT_PEER_COLORS = [0xcc5049, 0xd67722, 0x955cdb, 0x40a920, 0x309eba, 0x368ad1, 0xc7508b]
 
 function normalizeColor (color) {
   const cached = normalizeColorCache.get(color)
@@ -162,6 +163,46 @@ function hslToHex (h, s, l) {
   return rgbToHex([Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)])
 }
 
+function colorIntToHex (value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return null
+  return `#${(number >>> 0 & 0xffffff).toString(16).padStart(6, '0')}`
+}
+
+function resolvePeerColor (peerColor, dark, fallback) {
+  if (!peerColor || typeof peerColor !== 'object') {
+    return { main: fallback, secondary: null, tertiary: null, backgroundEmojiId: null, collectible: false }
+  }
+
+  const isCollectible = peerColor.type === 'collectible' || peerColor._ === 'PeerColorCollectible'
+  let palette
+  let main
+  if (isCollectible) {
+    const darkPalette = Array.isArray(peerColor.dark_colors) ? peerColor.dark_colors : []
+    palette = dark && darkPalette.length ? darkPalette : (peerColor.colors || [])
+    main = colorIntToHex(dark && peerColor.dark_accent_color != null
+      ? peerColor.dark_accent_color
+      : peerColor.accent_color)
+  } else {
+    const darkPalette = Array.isArray(peerColor.dark_colors) ? peerColor.dark_colors : []
+    palette = dark && darkPalette.length ? darkPalette : (peerColor.colors || [])
+    if (!palette.length && Number.isInteger(peerColor.color) && DEFAULT_PEER_COLORS[peerColor.color] != null) {
+      palette = [DEFAULT_PEER_COLORS[peerColor.color]]
+    }
+    main = colorIntToHex(palette[0]) || fallback
+    palette = palette.slice(1)
+  }
+
+  return {
+    main: main || fallback,
+    secondary: colorIntToHex(palette[0]),
+    tertiary: colorIntToHex(palette[1]),
+    backgroundEmojiId: peerColor.background_emoji_id != null ? String(peerColor.background_emoji_id) : null,
+    collectible: isCollectible
+  }
+}
+
 module.exports = {
-  ColorContrast, hexToRgb, rgbToHex, normalizeColor, colorLuminance, lightOrDark, parseBackgroundColor, hexToHsl, hslToHex
+  ColorContrast, hexToRgb, rgbToHex, normalizeColor, colorLuminance, lightOrDark, parseBackgroundColor, hexToHsl, hslToHex,
+  colorIntToHex, resolvePeerColor
 }

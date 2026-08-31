@@ -24,7 +24,7 @@ const SP = {
   maxHeader: 300, // header/forward-label width cap — longer names fade out instead of inflating the bubble
   radius: 25, // bubble corner radius
   radiusGrouped: 7, // corner radius facing a same-sender neighbour bubble
-  replyThumb: 34, // reply media thumbnail side
+  replyThumb: 32, // Telegram Desktop historyReplyPreview
   shadowPad: 12, // canvas margin (right/bottom) so the drop shadow isn't clipped
   shadowPadTop: 4, // canvas margin above the bubble (shadow blur spills up a little)
   glass: 1.25, // frosted-glass hairline width (border + top edge highlight)
@@ -36,7 +36,7 @@ const SP = {
   // Accent block — the modern-Telegram rounded tinted block used for both
   // the reply preview and the partial-quote body: solid bar on the left,
   // accent tint behind, optional ❝ in the corner.
-  block: { padY: 6, padL: 10, padR: 10, padRIcon: 22, bar: 3.5, icon: 15, iconInset: 5, radius: 7, tint: 0.14, gap: 3 }
+  block: { padY: 5, padL: 9, padR: 9, padRIcon: 22, bar: 3, icon: 15, iconInset: 5, radius: 6, tint: 0.1, gap: 2 }
 }
 
 function drawQuote (options) {
@@ -100,7 +100,10 @@ function drawQuote (options) {
     // Modern Telegram renders the reply preview as a tinted accent block in
     // the replied sender's color — same visual language as a quote. A media
     // thumbnail (when the replied message has one) sits left of the texts.
-    const replyTexts = box({ dir: 'col', gap: s(SP.block.gap), children: [leaf(reply.name), leaf(reply.text)] })
+    const textLine = reply.icon
+      ? box({ dir: 'row', gap: s(3), align: 'center', children: [leaf(reply.icon), leaf(reply.text)] })
+      : leaf(reply.text)
+    const replyTexts = box({ dir: 'col', gap: s(SP.block.gap), children: [leaf(reply.name), textLine] })
     const inner = reply.thumb
       ? box({
         dir: 'row',
@@ -117,7 +120,11 @@ function drawQuote (options) {
         ]
       })
       : replyTexts
-    replyNode = accentBlock(s, reply.nameColor, { children: [inner] })
+    replyNode = accentBlock(s, reply.colors || reply.nameColor, {
+      backgroundEmoji: reply.backgroundEmoji,
+      emptyCorner: reply.collectible,
+      children: [inner]
+    })
   }
 
   // Media-only bubbles (photo with no caption/name/reply) are pure media:
@@ -308,22 +315,92 @@ function coverSquare (img) {
 // color, solid accent bar on the left, optional solid ❝ in the top-right
 // corner. Used for the reply preview (accent = replied sender's color) and
 // the partial-quote body (accent = quoted sender's color).
-function accentBlock (s, accent, { icon = false, children }) {
+function accentBlock (s, accent, { icon = false, backgroundEmoji = null, emptyCorner = false, children }) {
   const b = SP.block
+  const colors = (Array.isArray(accent) ? accent : [accent]).filter(Boolean)
+  const primary = colors[0] || '#fff'
   return box({
     gap: s(b.gap),
     pad: { t: s(b.padY), r: s(icon ? b.padRIcon : b.padR), b: s(b.padY), l: s(b.padL) },
     bg: (ctx, n) => {
-      const solid = drawRoundRect(accent, n.w, n.h, s(b.radius), 0)
+      const solid = drawRoundRect(primary, n.w, n.h, s(b.radius), 0)
       ctx.save()
       ctx.globalAlpha = b.tint
       ctx.drawImage(solid, n.x, n.y)
       ctx.restore()
-      ctx.drawImage(solid, 0, 0, s(b.bar), n.h, n.x, n.y, s(b.bar), n.h)
-      if (icon) ctx.drawImage(drawQuoteIcon(s(b.icon), accent, 1), n.x + n.w - s(b.icon) - s(b.iconInset), n.y + s(b.iconInset))
+      paintAccentBar(ctx, n, colors, s(b.bar), s(6))
+      if (backgroundEmoji) paintBackgroundEmoji(ctx, n, backgroundEmoji, primary, emptyCorner, s)
+      if (icon) ctx.drawImage(drawQuoteIcon(s(b.icon), primary, 1), n.x + n.w - s(b.icon) - s(b.iconInset), n.y + s(b.iconInset))
     },
     children
   })
+}
+
+function paintAccentBar (ctx, n, colors, width, dashHeight) {
+  ctx.save()
+  ctx.beginPath()
+  roundedRectPath(ctx, n.x, n.y, width, n.h, width / 2)
+  ctx.clip()
+  if (colors.length < 2) {
+    ctx.fillStyle = colors[0] || '#fff'
+    ctx.fillRect(n.x, n.y, width, n.h)
+  } else {
+    for (let y = -dashHeight; y < n.h + dashHeight; y += dashHeight) {
+      const index = Math.abs(Math.floor(y / dashHeight)) % colors.length
+      ctx.fillStyle = colors[index]
+      ctx.beginPath()
+      ctx.moveTo(n.x, n.y + y + dashHeight * 0.25)
+      ctx.lineTo(n.x + width, n.y + y)
+      ctx.lineTo(n.x + width, n.y + y + dashHeight)
+      ctx.lineTo(n.x, n.y + y + dashHeight * 1.25)
+      ctx.closePath()
+      ctx.fill()
+    }
+  }
+  ctx.restore()
+}
+
+function paintBackgroundEmoji (ctx, n, image, color, emptyCorner, s) {
+  const placements = [
+    [55, 47, 58], [180, 13, 38], [133, 74, 46], [262, 67, 54], [364, 26, 58]
+  ]
+  ctx.save()
+  ctx.beginPath()
+  roundedRectPath(ctx, n.x, n.y, n.w, n.h, s(SP.block.radius))
+  ctx.clip()
+  for (let i = 0; i < placements.length; i++) {
+    if (emptyCorner && i === 0) continue
+    const [px, py, rawSize] = placements[i]
+    const size = s(rawSize / 3)
+    const x = n.x + n.w - s(px / 3) - size / 2
+    const y = n.y + s(py / 3) - size / 2
+    const alphaFraction = Math.min(1, s(px / 3) / Math.min(s(500), n.w))
+    ctx.save()
+    ctx.globalAlpha = 0.3 * (1 - alphaFraction)
+    ctx.drawImage(tintImage(image, color, size), x, y, size, size)
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
+function tintImage (image, color, size) {
+  const out = createCanvas(Math.max(1, Math.ceil(size)), Math.max(1, Math.ceil(size)))
+  const ctx = out.getContext('2d')
+  ctx.drawImage(image, 0, 0, out.width, out.height)
+  ctx.globalCompositeOperation = 'source-in'
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, out.width, out.height)
+  return out
+}
+
+function roundedRectPath (ctx, x, y, w, h, radius) {
+  const r = Math.min(radius, w / 2, h / 2)
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
 }
 
 module.exports = { drawQuote, SP }
