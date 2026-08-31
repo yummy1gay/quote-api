@@ -96,14 +96,16 @@ function drawQuote (options) {
   }
 
   let replyNode = null
+  let replyNameLeaf = null
   if (reply) {
     // Modern Telegram renders the reply preview as a tinted accent block in
     // the replied sender's color — same visual language as a quote. A media
     // thumbnail (when the replied message has one) sits left of the texts.
+    replyNameLeaf = leaf(reply.name)
     const textLine = reply.icon
       ? box({ dir: 'row', gap: s(3), align: 'center', children: [leaf(reply.icon), leaf(reply.text)] })
       : leaf(reply.text)
-    const replyTexts = box({ dir: 'col', gap: s(SP.block.gap), children: [leaf(reply.name), textLine] })
+    const replyTexts = box({ dir: 'col', gap: s(SP.block.gap), children: [replyNameLeaf, textLine] })
     const inner = reply.thumb
       ? box({
         dir: 'row',
@@ -255,16 +257,17 @@ function drawQuote (options) {
   }
 
   let root
+  let stickerChip = null
   if (isSticker) {
     // Sticker: no bubble; an optional dark overlay chip holds metadata/reply.
-    const chip = headerNode || forwardNode || replyNode
+    stickerChip = headerNode || forwardNode || replyNode
       ? box({
         pad: bubblePad,
         bg: (ctx, n) => ctx.drawImage(drawRoundRect('rgba(0, 0, 0, 0.5)', n.w, n.h, s(SP.radius), 0), n.x, n.y),
         children: [headerNode, forwardNode, replyNode]
       })
       : null
-    root = box({ dir: 'col', gap: s(SP.gap), children: [chip, mediaNode] })
+    root = box({ dir: 'col', gap: s(SP.gap), children: [stickerChip, mediaNode] })
   } else {
     root = box({
       dir: 'col',
@@ -279,6 +282,16 @@ function drawQuote (options) {
   // ---- Compose ------------------------------------------------------------
 
   measure(root)
+  if (replyNode && reply.giftEmoji && replyNameLeaf) {
+    const parent = stickerChip || root
+    const replyWidth = parent.w - parent.pad.l - parent.pad.r
+    const thumbOffset = reply.thumb ? s(SP.replyThumb + 7) : 0
+    const nameRight = replyNode.pad.l + thumbOffset + replyNameLeaf.w
+    if (nameRight > replyWidth - s(28)) {
+      replyNode.pad.r = s(SP.block.padRGift)
+      measure(root)
+    }
+  }
 
   const shadowPad = s(SP.shadowPad)
   const shadowPadTop = s(SP.shadowPadTop)
@@ -323,10 +336,9 @@ function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmo
   const b = SP.block
   const colors = (Array.isArray(accent) ? accent : [accent]).filter(Boolean)
   const primary = fillColor || colors[0] || '#fff'
-  const padR = giftEmoji ? b.padRGift : (icon ? b.padRIcon : b.padR)
   return box({
     gap: s(b.gap),
-    pad: { t: s(b.padY), r: s(padR), b: s(b.padY), l: s(b.padL) },
+    pad: { t: s(b.padY), r: s(icon ? b.padRIcon : b.padR), b: s(b.padY), l: s(b.padL) },
     bg: (ctx, n) => {
       const solid = drawRoundRect(primary, n.w, n.h, s(b.radius), 0)
       ctx.save()
