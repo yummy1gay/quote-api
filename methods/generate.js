@@ -2,7 +2,7 @@ const path = require('path')
 const { QuoteGenerate } = require('../utils')
 const { createCanvas, loadImage } = require('canvas')
 const sharp = require('sharp')
-const { parseBackgroundColor, colorLuminance } = require('../utils/quote-generate/color')
+const { parseBackgroundColor, colorLuminance, lightOrDark, hexToHsl, hslToHex } = require('../utils/quote-generate/color')
 const { brands: emojiBrands } = require('../utils/emoji-image')
 
 const ALLOWED_EMOJI_BRANDS = new Set(Object.keys(emojiBrands))
@@ -53,26 +53,50 @@ function normalizeMessage (message) {
   }
 }
 
-async function drawPatternBackground (canvas, colorOne, colorTwo, patternImage, lumOne, lumTwo) {
+async function drawPatternBackground (canvas, centerColor, edgeColor, patternImage, patternAlpha) {
   const ctx = canvas.getContext('2d')
 
   const gradient = ctx.createRadialGradient(
     canvas.width / 2, canvas.height / 2, 0,
     canvas.width / 2, canvas.height / 2, canvas.width / 2
   )
-
-  const patternColorOne = colorLuminance(colorOne, lumOne)
-  const patternColorTwo = colorLuminance(colorTwo, lumTwo)
-
-  gradient.addColorStop(0, patternColorOne)
-  gradient.addColorStop(1, patternColorTwo)
+  gradient.addColorStop(0, centerColor)
+  gradient.addColorStop(1, edgeColor)
 
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  const pattern = ctx.createPattern(imageAlpha(patternImage, 0.3), 'repeat')
+  const pattern = ctx.createPattern(imageAlpha(patternImage, patternAlpha), 'repeat')
   ctx.fillStyle = pattern
   ctx.fillRect(0, 0, canvas.width, canvas.height)
+}
+
+// Wallpaper colors derived from the bubble color. The bubble must sit ON the
+// wallpaper, not dissolve into it:
+//  • dark bubbles → a much darker backdrop (luminance drop + vignette);
+//  • light bubbles → a PASTEL backdrop, like Telegram's light wallpapers:
+//    saturate the hue and keep lightness high — darkening a near-white just
+//    makes mud. Near-gray inputs fall back to a soft Telegram-ish blue.
+function wallpaperColors (colorOne) {
+  if (lightOrDark(colorOne) === 'dark') {
+    return {
+      center: colorLuminance(colorOne, -0.35),
+      edge: colorLuminance(colorOne, -0.6),
+      patternAlpha: 0.22
+    }
+  }
+  let [h, s] = hexToHsl(colorOne)
+  if (s < 0.08) {
+    h = 207 // washed-out gray/white → soft blue
+    s = 0.45
+  } else {
+    s = Math.min(1, Math.max(s * 1.8, 0.35))
+  }
+  return {
+    center: hslToHex(h, s, 0.8),
+    edge: hslToHex(h, s, 0.62),
+    patternAlpha: 0.18
+  }
 }
 
 module.exports = async (parm) => {
@@ -92,6 +116,17 @@ module.exports = async (parm) => {
   const validMessages = parm.messages.filter(Boolean)
   for (const message of validMessages) {
     normalizeMessage(message)
+  }
+
+  // Same-sender runs render with grouped corners (small radii between
+  // neighbours), like consecutive messages in Telegram. The avatar (and with
+  // it the bubble tail) belongs to the LAST message of a group only — the
+  // reserved left column keeps the other bubbles aligned.
+  for (let i = 0; i < validMessages.length; i++) {
+    const prevSame = i > 0 && validMessages[i - 1].chatId === validMessages[i].chatId
+    const nextSame = i < validMessages.length - 1 && validMessages[i + 1].chatId === validMessages[i].chatId
+    validMessages[i].groupPos = prevSame && nextSame ? 'middle' : prevSame ? 'last' : nextSame ? 'first' : 'single'
+    if (nextSame) validMessages[i].avatar = false
   }
 
   // Generate quotes with concurrency limit to avoid Telegram API rate limits
@@ -130,8 +165,12 @@ module.exports = async (parm) => {
     runNext()
   })
 
-  // Filter nulls (failed messages) while preserving order
-  const filteredImages = quoteImages.filter(Boolean)
+  // Filter nulls (failed messages) while preserving order, keeping each
+  // image paired with its source message (for grouped-margin decisions).
+  const pairs = validMessages
+    .map((message, i) => ({ message, image: quoteImages[i] }))
+    .filter((p) => p.image)
+  const filteredImages = pairs.map((p) => p.image)
 
   if (filteredImages.length === 0) {
     return { error: 'empty_messages' }
@@ -148,15 +187,23 @@ module.exports = async (parm) => {
       height += filteredImages[index].height
     }
 
-    const quoteMargin = 5 * scale
+    // Tighter spacing inside a same-sender group, roomier between groups.
+    const margins = []
+    let totalMargin = 0
+    for (let index = 0; index < pairs.length - 1; index++) {
+      const grouped = pairs[index].message.chatId === pairs[index + 1].message.chatId
+      const m = (grouped ? 2 : 6) * scale
+      margins.push(m)
+      totalMargin += m
+    }
 
-    const canvas = createCanvas(width, height + (quoteMargin * filteredImages.length))
+    const canvas = createCanvas(width, height + totalMargin)
     const canvasCtx = canvas.getContext('2d')
 
     let imageY = 0
     for (let index = 0; index < filteredImages.length; index++) {
       canvasCtx.drawImage(filteredImages[index], 0, imageY)
-      imageY += filteredImages[index].height + quoteMargin
+      imageY += filteredImages[index].height + (margins[index] || 0)
     }
     canvasQuote = canvas
   } else {
@@ -202,7 +249,8 @@ module.exports = async (parm) => {
     const canvasPicCtx = canvasPic.getContext('2d')
 
     const patternImage = await getPatternImage()
-    await drawPatternBackground(canvasPic, background.colorTwo, background.colorOne, patternImage, 0.15, 0.15)
+    const wp = wallpaperColors(background.colorOne)
+    await drawPatternBackground(canvasPic, wp.center, wp.edge, patternImage, wp.patternAlpha)
 
     canvasPicCtx.shadowOffsetX = 8
     canvasPicCtx.shadowOffsetY = 8
@@ -226,7 +274,8 @@ module.exports = async (parm) => {
     const canvasPicCtx = canvasPic.getContext('2d')
 
     const patternImage = await getPatternImage()
-    await drawPatternBackground(canvasPic, background.colorTwo, background.colorOne, patternImage, 0.25, 0.15)
+    const storyWp = wallpaperColors(background.colorOne)
+    await drawPatternBackground(canvasPic, storyWp.center, storyWp.edge, patternImage, storyWp.patternAlpha)
 
     canvasPicCtx.shadowOffsetX = 8
     canvasPicCtx.shadowOffsetY = 8
