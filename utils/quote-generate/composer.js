@@ -36,7 +36,7 @@ const SP = {
   // Accent block — the modern-Telegram rounded tinted block used for both
   // the reply preview and the partial-quote body: solid bar on the left,
   // accent tint behind, optional ❝ in the corner.
-  block: { padY: 5, padL: 9, padR: 9, padRIcon: 22, bar: 3, icon: 15, iconInset: 5, radius: 6, tint: 0.1, gap: 2 }
+  block: { padY: 5, padL: 9, padR: 9, padRIcon: 22, padRGift: 32, bar: 3, icon: 15, iconInset: 5, radius: 6, tint: 0.1, gap: 2 }
 }
 
 function drawQuote (options) {
@@ -323,9 +323,10 @@ function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmo
   const b = SP.block
   const colors = (Array.isArray(accent) ? accent : [accent]).filter(Boolean)
   const primary = fillColor || colors[0] || '#fff'
+  const padR = giftEmoji ? b.padRGift : (icon ? b.padRIcon : b.padR)
   return box({
     gap: s(b.gap),
-    pad: { t: s(b.padY), r: s(icon ? b.padRIcon : b.padR), b: s(b.padY), l: s(b.padL) },
+    pad: { t: s(b.padY), r: s(padR), b: s(b.padY), l: s(b.padL) },
     bg: (ctx, n) => {
       const solid = drawRoundRect(primary, n.w, n.h, s(b.radius), 0)
       ctx.save()
