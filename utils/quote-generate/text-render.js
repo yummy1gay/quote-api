@@ -60,7 +60,11 @@ function renderText (layout, prepared, fontColor) {
 
       const drawY = line.y
 
-      if (seg.kind === 'emoji' && seg.emojiImage) {
+      if (seg.kind === 'inline_button' && seg.inlineButtonImage) {
+        const lineBoxHeight = prepared.ascent + prepared.descent
+        const top = drawY - prepared.ascent + (lineBoxHeight - seg.inlineButtonImage.height) / 2
+        ctx.drawImage(seg.inlineButtonImage, drawX, top)
+      } else if (seg.kind === 'emoji' && seg.emojiImage) {
         // Draw emoji image at consistent size
         ctx.drawImage(
           seg.emojiImage,

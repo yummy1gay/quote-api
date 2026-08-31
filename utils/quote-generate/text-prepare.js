@@ -35,6 +35,8 @@ function getMeasureCtx () {
 
 // Module-level emoji image cache — persists across calls
 const emojiImageCache = new Map()
+const customEmojiImageCache = new Map()
+const customEmojiLoadingPromises = new Map()
 
 // Vertical metrics of the base font at a given size — a constant of the
 // font, so glyph shapes never affect line geometry (no "breathing" bubbles).
@@ -98,7 +100,12 @@ function buildStyledChars (text, entities) {
           : entity.type
 
       if (entity.type === 'custom_emoji') {
-        styledChars[entity.offset].customEmojiId = entity.custom_emoji_id
+        for (let i = entity.offset; i < entity.offset + entity.length; i++) {
+          if (styledChars[i]) styledChars[i].customEmojiId = String(entity.custom_emoji_id || '')
+        }
+      }
+      if (entity.type === 'inline_button' && styledChars[entity.offset]) {
+        styledChars[entity.offset].inlineButtonImage = entity.inlineButtonImage || null
       }
 
       for (let i = entity.offset; i < entity.offset + entity.length; i++) {
@@ -177,27 +184,79 @@ async function loadEmojiImages (emojis, emojiBrand) {
 }
 
 // Load custom emoji stickers via Telegram API
-async function loadCustomEmojis (customEmojiIds, telegram) {
+function findCustomEmojiFile (files, id) {
+  if (!files || !id) return null
+  if (files[id]) return files[id]
+  const match = Object.entries(files).find(([key]) => Number(key) === Number(id))
+  return match ? match[1] : null
+}
+
+async function decodeCustomEmoji (source) {
+  if (!source) return null
+  const data = await loadImageFromUrl(source).catch(() => null)
+  if (!data) return null
+  const png = await sharp(data, { animated: false }).png().toBuffer().catch(() => null)
+  return png ? loadImage(png).catch(() => null) : loadImage(data).catch(() => null)
+}
+
+async function loadCustomEmojis (customEmojiIds, telegram, customEmojiFiles) {
   const result = {}
-  if (customEmojiIds.length === 0 || !telegram) return result
+  const ids = [...new Set(customEmojiIds.map(String).filter(Boolean))]
+  if (ids.length === 0) return result
+
+  const unresolved = []
+  for (const id of ids) {
+    if (customEmojiImageCache.has(id)) {
+      result[id] = customEmojiImageCache.get(id)
+      continue
+    }
+    if (customEmojiLoadingPromises.has(id)) {
+      const image = await customEmojiLoadingPromises.get(id)
+      if (image) {
+        result[id] = image
+        continue
+      }
+    }
+    const file = findCustomEmojiFile(customEmojiFiles, id)
+    if (file && file.url) {
+      const loading = decodeCustomEmoji(file.url)
+      customEmojiLoadingPromises.set(id, loading)
+      const image = await loading
+      customEmojiLoadingPromises.delete(id)
+      if (image) {
+        customEmojiImageCache.set(id, image)
+        result[id] = image
+        continue
+      }
+    }
+    unresolved.push(id)
+  }
+
+  if (!telegram || unresolved.length === 0) return result
 
   const stickers = await telegram.callApi('getCustomEmojiStickers', {
-    custom_emoji_ids: customEmojiIds
+    custom_emoji_ids: unresolved
   }).catch(() => null)
 
   if (!stickers) return result
 
   const promises = stickers.map(async sticker => {
-    if (!sticker.thumb || !sticker.thumb.file_id) return
-    const fileLink = await telegram.getFileLink(sticker.thumb.file_id).catch(() => null)
+    const id = String(sticker.custom_emoji_id || '')
+    const preview = sticker.thumbnail || sticker.thumb
+    const fileId = (preview && preview.file_id) || sticker.file_id
+    if (!id || !fileId) return
+    const fileLink = await telegram.getFileLink(fileId).catch(() => null)
     if (!fileLink) return
-    const data = await loadImageFromUrl(fileLink).catch(() => null)
-    if (!data) return
-    const png = await sharp(data).png({ lossless: true, force: true }).toBuffer()
-    result[sticker.custom_emoji_id] = await loadImage(png).catch(() => null)
+    const image = await decodeCustomEmoji(String(fileLink))
+    if (!image) return
+    customEmojiImageCache.set(id, image)
+    result[id] = image
   })
 
   await Promise.all(promises).catch(() => {})
+  if (customEmojiImageCache.size > 256) {
+    customEmojiImageCache.delete(customEmojiImageCache.keys().next().value)
+  }
   return result
 }
 
@@ -258,18 +317,20 @@ function pushSegment (segments, styledChars, start, end, fontSize, emojiSize, em
   let kind = 'text'
   if (text.match(BREAK_REGEX)) kind = 'break'
   else if (text.match(SPACE_REGEX) && !text.match(/\S/)) kind = 'space'
-  else if (first.emoji) kind = 'emoji'
+  else if (first.inlineButtonImage) kind = 'inline_button'
+  else if (first.emoji || first.customEmojiId) kind = 'emoji'
 
   // Resolve emoji image
   let emojiImage = null
   const emojiCode = first.emoji ? first.emoji.code : null
   const customEmojiId = first.customEmojiId || null
+  const inlineButtonImage = first.inlineButtonImage || null
 
-  if (first.emoji) {
+  if (first.emoji || customEmojiId) {
     if (customEmojiId && customEmojiMap[customEmojiId]) {
       emojiImage = customEmojiMap[customEmojiId]
     } else {
-      emojiImage = emojiMap.get(first.emoji.code) || null
+      emojiImage = first.emoji ? (emojiMap.get(first.emoji.code) || null) : null
     }
     kind = 'emoji'
   }
@@ -282,6 +343,7 @@ function pushSegment (segments, styledChars, start, end, fontSize, emojiSize, em
     emojiImage,
     emojiCode,
     customEmojiId,
+    inlineButtonImage,
     width: 0 // measured later
   })
 }
@@ -441,6 +503,10 @@ function measureSegments (segments, fontSize) {
   let currentFont = null
 
   for (const seg of segments) {
+    if (seg.kind === 'inline_button') {
+      seg.width = seg.inlineButtonImage.width
+      continue
+    }
     if (seg.kind === 'emoji') {
       seg.width = emojiSize
       continue
@@ -479,7 +545,7 @@ function computeGraphemeWidths (segment) {
  * Prepare text for layout. Handles all async I/O (emoji loading, Telegram API).
  * Returns a PreparedText object that can be passed to layoutText/renderText.
  */
-async function prepareText (text, entities, fontSize, emojiBrand, telegram) {
+async function prepareText (text, entities, fontSize, emojiBrand, telegram, customEmojiFiles) {
   if (!text) {
     return {
       segments: [],
@@ -507,7 +573,7 @@ async function prepareText (text, entities, fontSize, emojiBrand, telegram) {
   for (const sc of styledChars) {
     if (sc.customEmojiId) customEmojiIds.push(sc.customEmojiId)
   }
-  const customEmojiMap = await loadCustomEmojis(customEmojiIds, telegram)
+  const customEmojiMap = await loadCustomEmojis(customEmojiIds, telegram, customEmojiFiles)
 
   // 5. Tokenize via Intl.Segmenter
   let segments = tokenize(text, styledChars, fontSize, emojiMap, customEmojiMap)

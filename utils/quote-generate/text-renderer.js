@@ -20,10 +20,11 @@ const { renderText } = require('./text-render')
  * @param {number} maxHeight - Maximum height
  * @param {string} emojiBrand - Emoji brand
  * @param {object} telegram - Telegraf instance
+ * @param {object} customEmojiFiles - Rich-message document previews keyed by ID
  * @returns {Canvas}
  */
-async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight, emojiBrand, telegram) {
-  const prepared = await prepareText(text, entities, fontSize, emojiBrand, telegram)
+async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight, emojiBrand, telegram, customEmojiFiles) {
+  const prepared = await prepareText(text, entities, fontSize, emojiBrand, telegram, customEmojiFiles)
 
   if (prepared.segments.length === 0) {
     const { createCanvas } = require('canvas')
