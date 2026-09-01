@@ -1,4 +1,5 @@
 const { createCanvas } = require('canvas')
+const { paintCopyIcon } = require('./tdesktop-icons')
 
 let Prism = null
 let loadLanguages = null
@@ -120,16 +121,6 @@ function roundedRect (ctx, x, y, width, height, radius) {
   ctx.closePath()
 }
 
-function paintCopyIcon (ctx, x, y, size, color) {
-  ctx.save()
-  ctx.strokeStyle = color
-  ctx.lineWidth = Math.max(1, size * 0.1)
-  ctx.lineJoin = 'round'
-  ctx.strokeRect(x, y + size * 0.24, size * 0.7, size * 0.7)
-  ctx.strokeRect(x + size * 0.24, y, size * 0.7, size * 0.7)
-  ctx.restore()
-}
-
 function renderCodeBlock (options) {
   const code = String(options.text || '').replace(/\r\n?/g, '\n')
   const language = String(options.language || '').trim()
@@ -163,14 +154,14 @@ function renderCodeBlock (options) {
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = muted
   const header = language || 'Copy'
-  const iconSize = 12 * scale
+  const iconSize = 16 * scale
   const iconX = out.width - iconSize - 4 * scale
   const headerMax = Math.max(1, iconX - padLeft - 4 * scale)
   let headerText = header
   while (headerText && ctx.measureText(headerText).width > headerMax) headerText = headerText.slice(0, -1)
   if (headerText !== header) headerText = headerText.slice(0, -1) + '…'
   ctx.fillText(headerText, padLeft, padTop + 13 * scale)
-  paintCopyIcon(ctx, iconX, padTop + 2 * scale, iconSize, muted)
+  paintCopyIcon(ctx, 'code', iconX, padTop, iconSize, muted)
 
   ctx.save()
   ctx.beginPath()

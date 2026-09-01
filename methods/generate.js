@@ -123,8 +123,15 @@ module.exports = async (parm) => {
   // it the bubble tail) belongs to the LAST message of a group only — the
   // reserved left column keeps the other bubbles aligned.
   for (let i = 0; i < validMessages.length; i++) {
-    const prevSame = i > 0 && validMessages[i - 1].chatId === validMessages[i].chatId
-    const nextSame = i < validMessages.length - 1 && validMessages[i + 1].chatId === validMessages[i].chatId
+    // Desktop does not attach a following message through an inline
+    // keyboard. The keyboard message itself may still attach to the same
+    // sender's message immediately above it.
+    const prevSame = i > 0 &&
+      validMessages[i - 1].chatId === validMessages[i].chatId &&
+      !validMessages[i - 1].replyMarkup
+    const nextSame = i < validMessages.length - 1 &&
+      validMessages[i + 1].chatId === validMessages[i].chatId &&
+      !validMessages[i].replyMarkup
     validMessages[i].groupPos = prevSame && nextSame ? 'middle' : prevSame ? 'last' : nextSame ? 'first' : 'single'
     if (nextSame) validMessages[i].avatar = false
   }

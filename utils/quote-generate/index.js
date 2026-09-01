@@ -13,6 +13,7 @@ const { drawAvatar } = require('./avatar')
 const { downloadMediaImage } = require('./media')
 const { drawQuote } = require('./composer')
 const { renderRichMessage } = require('./rich-message')
+const { prepareReplyMarkup } = require('./reply-markup')
 const { drawLabel } = require('./canvas-utils')
 const { loadIcons, loadCustomEmojiImage, drawVoiceRow, drawDocumentRow, drawAudioRow, drawReplyIcon, formatDuration } = require('./attachments')
 const { ColorContrast, lightOrDark, colorLuminance, resolvePeerColor } = require('./color')
@@ -345,6 +346,34 @@ class QuoteGenerate {
       }
     }
 
+    // Telegram venue card: the map is media, while the place title and
+    // address are a dedicated caption area (not part of message.text).
+    let venue = null
+    if (message.venue && (message.venue.title || message.venue.address)) {
+      const venueMaxWidth = Math.max(1, (maxMediaSize || width * 2 / 3) - 32 * scale)
+      const venueTitleSize = 18 * scale
+      const venueAddressSize = 16 * scale
+      const venueTitle = String(message.venue.title || '')
+      const venueAddress = String(message.venue.address || '')
+      const titleCanvas = venueTitle
+        ? await drawMultilineText(
+          venueTitle,
+          [{ type: 'bold', offset: 0, length: venueTitle.length }],
+          venueTitleSize, textColor,
+          0, venueTitleSize, venueMaxWidth, venueTitleSize * 2,
+          emojiBrand, this.telegram
+        )
+        : null
+      const addressCanvas = venueAddress
+        ? await drawMultilineText(
+          venueAddress, [], venueAddressSize, textColor,
+          0, venueAddressSize, venueMaxWidth, venueAddressSize * 3,
+          emojiBrand, this.telegram
+        )
+        : null
+      venue = { title: titleCanvas, address: addressCanvas }
+    }
+
     // Row-style attachments (rendered inside the bubble, like Telegram).
     let attachment = null
     const attachMaxW = width * 2 / 3
@@ -388,6 +417,24 @@ class QuoteGenerate {
     // Sender tag (user role in group)
     const senderTag = message.senderTag || null
 
+    // Inline bot buttons belong to the message and are rendered as a
+    // separate grid immediately below its bubble. Ordinary reply keyboards
+    // live in the input panel and are intentionally not part of a quote.
+    let replyMarkup = null
+    if (message.replyMarkup) {
+      try {
+        replyMarkup = await prepareReplyMarkup(message.replyMarkup, {
+          scale,
+          maxWidth: width,
+          dark: backStyle === 'dark',
+          emojiBrand,
+          telegram: this.telegram
+        })
+      } catch (error) {
+        console.error('Failed to render reply markup:', error.message, error.stack)
+      }
+    }
+
     // "via @bot" chip (inline-bot messages)
     let viaBotCanvas = null
     if (message.viaBot) {
@@ -396,21 +443,28 @@ class QuoteGenerate {
     }
 
     // Nothing to render — skip this message
-    if (!textCanvas && !nameCanvas && !mediaCanvas && !replyData && !attachment && !richContent) {
+    if (!textCanvas && !nameCanvas && !mediaCanvas && !replyData && !attachment && !richContent && !venue && !replyMarkup) {
       return null
     }
 
     return drawQuote({
       scale,
-      background: { colorOne: backgroundColorOne, colorTwo: backgroundColorTwo, textColor },
+      background: {
+        colorOne: backgroundColorOne,
+        colorTwo: backgroundColorTwo,
+        textColor,
+        tagColor: backStyle === 'light' ? '#999999' : '#708499'
+      },
       avatar: avatarCanvas,
       reply: replyData,
       name: nameCanvas,
       text: textCanvas,
       textBlocks,
       media: mediaCanvas ? { canvas: mediaCanvas, type: mediaType, maxSize: maxMediaSize, badge: mediaBadge } : null,
+      venue,
       attachment: attachment ? { canvas: attachment } : null,
       richContent,
+      replyMarkup,
       isForward,
       forwardLabel,
       nameColor,

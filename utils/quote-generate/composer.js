@@ -9,6 +9,7 @@ const { createCanvas } = require('canvas')
 const { drawRoundRect, drawGradientRoundRect, roundImage, drawQuoteIcon, drawLabel, drawForwardLabel } = require('./canvas-utils')
 const { paintMediaBadges } = require('./attachments')
 const { leaf, box, measure, place, render } = require('./layout-box')
+const { renderReplyMarkup } = require('./reply-markup')
 
 // All spacing in logical px (multiplied by scale at use). The single place
 // to tune how a quote breathes.
@@ -39,6 +40,37 @@ const SP = {
   block: { padY: 5, padL: 9, padR: 9, padRIcon: 22, padRGift: 32, bar: 3, icon: 15, iconInset: 5, radius: 6, tint: 0.1, gap: 2 }
 }
 
+// Telegram Desktop's rank palette and geometry. Regular member tags are
+// plain secondary text; admin/owner ranks are coloured pills at 15% opacity.
+function drawSenderTag (senderTag, scale, memberColor) {
+  const data = typeof senderTag === 'object'
+    ? senderTag
+    : { text: senderTag, role: 'member' }
+  const text = String(data.text || data.label || '').replace(/[\r\n]+/g, ' ').trim()
+  if (!text) return null
+
+  const role = String(data.role || 'member').toLowerCase()
+  const color = role === 'owner' || role === 'creator'
+    ? '#956ac8'
+    : role === 'admin'
+      ? '#49a355'
+      : memberColor
+  const label = drawLabel(text, 13 * scale, color)
+  if (role !== 'owner' && role !== 'creator' && role !== 'admin') return label
+
+  const padX = 5 * scale
+  const height = label.height
+  const width = Math.ceil(Math.max(label.width + padX * 2, height))
+  const rgb = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i)
+  const fill = rgb
+    ? `rgba(${parseInt(rgb[1], 16)}, ${parseInt(rgb[2], 16)}, ${parseInt(rgb[3], 16)}, 0.15)`
+    : color
+  const pill = drawRoundRect(fill, width, height, height / 2)
+  const ctx = pill.getContext('2d')
+  ctx.drawImage(label, Math.round((width - label.width) / 2), 0)
+  return pill
+}
+
 function drawQuote (options) {
   const {
     scale = 1,
@@ -49,8 +81,10 @@ function drawQuote (options) {
     text,
     textBlocks, // [{ canvas, quote, pre }] — text split around structural entities
     media,
+    venue, // { title, address } — Telegram location/venue caption canvases
     attachment, // pre-rendered in-bubble row canvas (voice/document/audio)
     richContent, // recursively rendered Telegram RichMessage page
+    replyMarkup, // prepared ReplyInlineMarkup grid attached below the bubble
     isForward,
     forwardLabel,
     nameColor,
@@ -66,6 +100,8 @@ function drawQuote (options) {
   const mediaType = media ? media.type : null
   const mediaCanvas = media ? media.canvas : null
   const isSticker = mediaType === 'sticker'
+  const hasVenue = Boolean(venue && (venue.title || venue.address))
+  const hasReplyMarkup = Boolean(replyMarkup && replyMarkup.rows && replyMarkup.rows.length)
   const nameCanvas = isSticker ? null : name
 
   // ---- Leaves -------------------------------------------------------------
@@ -74,7 +110,7 @@ function drawQuote (options) {
   if (nameCanvas || viaBot) {
     let tagLeaf = null
     if (senderTag) {
-      tagLeaf = leaf(drawLabel(senderTag, s(13), background.textColor || '#fff', { alpha: 0.45 }))
+      tagLeaf = leaf(drawSenderTag(senderTag, scale, background.tagColor || '#999999'))
     }
     // The header fits into maxHeader as a whole: the name yields (fades)
     // first, "via @bot" and the tag always stay visible.
@@ -136,7 +172,7 @@ function drawQuote (options) {
 
   // Media-only bubbles (photo with no caption/name/reply) are pure media:
   // the photo IS the bubble, rounded with the bubble radius.
-  const mediaOnly = !!mediaCanvas && !headerNode && !text && !reply && !forwardLabel && !attachment && !richContent
+  const mediaOnly = !!mediaCanvas && !headerNode && !text && !reply && !forwardLabel && !attachment && !richContent && !hasVenue
 
   // Grouped bubbles flatten the left corners that face their neighbours.
   const R = s(SP.radius)
@@ -147,12 +183,22 @@ function drawQuote (options) {
     br: R,
     bl: groupPos === 'first' || groupPos === 'middle' ? rSmall : R
   }
+  const keyboardRadii = {
+    bl: radii.bl === R ? s(16) : s(8),
+    br: radii.br === R ? s(16) : s(8)
+  }
+  // An attached inline keyboard continues the shape below the bubble. The
+  // bubble-facing corners therefore become the small Telegram corners.
+  if (hasReplyMarkup) {
+    radii.bl = s(8)
+    radii.br = s(8)
+  }
 
   // Like Telegram, media hugs the bubble edge it borders: with no caption
   // below (or no header above) the bubble padding on that side collapses and
   // the media corners inherit the bubble's own radii.
   const isRound = mediaType === 'video_note' // round video — circular mask
-  const hasCaption = Boolean(text) || (Array.isArray(textBlocks) && textBlocks.length > 0) || Boolean(attachment) || Boolean(richContent)
+  const hasCaption = Boolean(text) || (Array.isArray(textBlocks) && textBlocks.length > 0) || Boolean(attachment) || Boolean(richContent) || hasVenue
   const flushable = !!mediaCanvas && !mediaOnly && !isSticker && !isRound
   const flushBottom = flushable && !hasCaption
   const flushTop = flushable && !headerNode && !(isForward && forwardLabel) && !reply
@@ -168,12 +214,14 @@ function drawQuote (options) {
     }
     const mr = s(SP.mediaRound)
     const mediaRadius = mediaOnly || isSticker
-      ? s(SP.radius * 0.6)
+      ? (mediaOnly && hasReplyMarkup
+          ? { tl: s(SP.radius * 0.6), tr: s(SP.radius * 0.6), br: s(8), bl: s(8) }
+          : s(SP.radius * 0.6))
       : {
         tl: flushTop ? radii.tl : mr,
         tr: flushTop ? radii.tr : mr,
-        br: flushBottom ? radii.br : mr,
-        bl: flushBottom ? radii.bl : mr
+        br: hasVenue ? 0 : (flushBottom ? radii.br : mr),
+        bl: hasVenue ? 0 : (flushBottom ? radii.bl : mr)
       }
     mediaNode = leaf(mediaCanvas, {
       trim: false,
@@ -209,6 +257,13 @@ function drawQuote (options) {
 
   // Voice/document/audio rows sit in the media slot but behave like text:
   // padded by the bubble, never flush.
+  const venueNode = hasVenue
+    ? box({
+      dir: 'col',
+      gap: 0,
+      children: [venue.title ? leaf(venue.title) : null, venue.address ? leaf(venue.address) : null]
+    })
+    : null
   const attachmentNode = attachment ? leaf(attachment.canvas) : null
   const richNode = richContent ? leaf(richContent) : null
 
@@ -240,7 +295,8 @@ function drawQuote (options) {
     b: flushBottom ? 0 : s(SP.padY),
     l: s(SP.padX)
   }
-  const tailSize = avatar ? s(SP.tail) : 0
+  // Desktop suppresses the bubble tail when inline buttons are attached.
+  const tailSize = avatar && !hasReplyMarkup ? s(SP.tail) : 0
 
   const bubbleBg = (ctx, n) => {
     const one = background.colorOne
@@ -277,13 +333,17 @@ function drawQuote (options) {
       pad: mediaOnly ? 0 : bubblePad,
       minW: mediaOnly ? 0 : s(SP.minWidth),
       bg: bubbleBg,
-      children: [headerNode, forwardNode, replyNode, mediaNode, attachmentNode, richNode, textNode]
+      children: [headerNode, forwardNode, replyNode, mediaNode, venueNode, attachmentNode, richNode, textNode]
     })
   }
 
   // ---- Compose ------------------------------------------------------------
 
   measure(root)
+  if (hasReplyMarkup && root.w < replyMarkup.naturalWidth) {
+    root.minW = Math.ceil(replyMarkup.naturalWidth)
+    measure(root)
+  }
   if (replyNode && reply.giftEmoji && replyNameLeaf) {
     const parent = stickerChip || root
     const replyWidth = parent.w - parent.pad.l - parent.pad.r
@@ -295,21 +355,33 @@ function drawQuote (options) {
     }
   }
 
+  const keyboardCanvas = hasReplyMarkup
+    ? renderReplyMarkup(replyMarkup, root.w, keyboardRadii)
+    : null
+  const keyboardGap = keyboardCanvas ? s(2) : 0
+  const keyboardHeight = keyboardCanvas ? keyboardGap + keyboardCanvas.height : 0
+
   const shadowPad = s(SP.shadowPad)
   const shadowPadTop = s(SP.shadowPadTop)
   const bubblePosX = s(SP.avatar) + s(SP.avatarGap)
   const width = bubblePosX + root.w + shadowPad
-  const height = shadowPadTop + Math.max(root.h, avatar ? s(SP.avatar) + s(2) : 0) + shadowPad
+  const messageHeight = root.h + keyboardHeight
+  const height = shadowPadTop + Math.max(messageHeight, avatar ? s(SP.avatar) + s(2) : 0) + shadowPad
 
   place(root, bubblePosX, shadowPadTop)
 
   const canvas = createCanvas(width, height)
   const ctx = canvas.getContext('2d')
   render(ctx, root)
+  if (keyboardCanvas) {
+    ctx.drawImage(keyboardCanvas, bubblePosX, shadowPadTop + root.h + keyboardGap)
+  }
 
   // Avatar at the bottom-left, over the bubble tail.
   if (avatar) {
-    const avatarY = Math.max(0, height - shadowPad - s(SP.avatar) - s(2))
+    // Inline buttons do not move the avatar down: it remains aligned with
+    // the message bubble, exactly as in Desktop.
+    const avatarY = Math.max(0, shadowPadTop + root.h - s(SP.avatar) - s(2))
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(avatar, 0, avatarY, s(SP.avatar), s(SP.avatar))

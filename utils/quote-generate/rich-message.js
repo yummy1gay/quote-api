@@ -3,6 +3,7 @@ const sharp = require('sharp')
 const { drawMultilineText } = require('./text-renderer')
 const { renderMath } = require('./math-renderer')
 const { renderCodeBlock } = require('./code-block')
+const { paintCopyIcon } = require('./tdesktop-icons')
 const { drawDocumentRow, drawAudioRow, paintMediaBadges } = require('./attachments')
 const { hexToRgb, normalizeColor, lightOrDark } = require('./color')
 const loadImageFromUrl = require('../image-load-url')
@@ -787,23 +788,22 @@ function buttonHasIcon (button) {
 }
 
 function paintButtonIcon (ctx, type, x, y, size, color) {
+  if (type === 'copy') {
+    paintCopyIcon(ctx, 'button', x, y, size, color)
+    return
+  }
   ctx.save()
   ctx.strokeStyle = color
   ctx.lineWidth = Math.max(1, size * 0.11)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  if (type === 'copy') {
-    ctx.strokeRect(x + size * 0.12, y + size * 0.28, size * 0.58, size * 0.58)
-    ctx.strokeRect(x + size * 0.3, y + size * 0.1, size * 0.58, size * 0.58)
-  } else {
-    ctx.beginPath()
-    ctx.moveTo(x + size * 0.25, y + size * 0.75)
-    ctx.lineTo(x + size * 0.75, y + size * 0.25)
-    ctx.moveTo(x + size * 0.43, y + size * 0.25)
-    ctx.lineTo(x + size * 0.75, y + size * 0.25)
-    ctx.lineTo(x + size * 0.75, y + size * 0.57)
-    ctx.stroke()
-  }
+  ctx.beginPath()
+  ctx.moveTo(x + size * 0.25, y + size * 0.75)
+  ctx.lineTo(x + size * 0.75, y + size * 0.25)
+  ctx.moveTo(x + size * 0.43, y + size * 0.25)
+  ctx.lineTo(x + size * 0.75, y + size * 0.25)
+  ctx.lineTo(x + size * 0.75, y + size * 0.57)
+  ctx.stroke()
   ctx.restore()
 }
 
@@ -833,7 +833,7 @@ async function renderInlineButton (button, labelValue, options) {
   )
   const height = Math.max(1, Math.min(options.size * 1.15, Math.max(14 * s, label.height + 4 * s)))
   const icon = buttonHasIcon(button)
-  const iconSize = 11 * s
+  const iconSize = buttonType(button) === 'copy' ? 10 * s : 11 * s
   const trailing = icon ? 17 * s : 6 * s
   const width = Math.max(height, Math.min(options.maxWidth, 6 * s + label.width + trailing))
   const out = createCanvas(Math.ceil(width), Math.ceil(height))
