@@ -279,7 +279,11 @@ function drawVoiceRow (waveform, duration, accent, textColor, scale, maxWidth) {
  * Document row: [accent file disc] [file name / size · EXT].
  */
 function drawDocumentRow (doc, accent, textColor, scale, maxWidth) {
-  const s = (v) => v * scale
+  // Attachment metrics came from a 16px Desktop message font, while the
+  // quote renderer uses 24px body text. Scale document cards by the same
+  // 1.5 ratio so their icon and both labels no longer look undersized.
+  const documentScale = scale * 1.5
+  const s = (v) => v * documentScale
   const d = s(ROW.disc)
   const name = String(doc.file_name || 'File')
   const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : ''
@@ -288,7 +292,7 @@ function drawDocumentRow (doc, accent, textColor, scale, maxWidth) {
 
   const title = drawLabel(name, s(ROW.title), textColor, { bold: true })
   const meta = metaText ? drawLabel(metaText, s(ROW.meta), textColor, { alpha: ROW.metaAlpha }) : null
-  return assembleRow(drawFileDisc(d, accent), title, meta, scale, maxWidth)
+  return assembleRow(drawFileDisc(d, accent), title, meta, documentScale, maxWidth)
 }
 
 /**

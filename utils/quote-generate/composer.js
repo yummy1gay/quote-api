@@ -8,6 +8,7 @@
 const { createCanvas } = require('canvas')
 const { drawRoundRect, drawGradientRoundRect, roundImage, drawQuoteIcon, drawLabel, drawForwardLabel } = require('./canvas-utils')
 const { paintMediaBadges } = require('./attachments')
+const { paintMapPoint } = require('./tdesktop-icons')
 const { leaf, box, measure, place, render } = require('./layout-box')
 const { renderReplyMarkup } = require('./reply-markup')
 
@@ -184,8 +185,8 @@ function drawQuote (options) {
     bl: groupPos === 'first' || groupPos === 'middle' ? rSmall : R
   }
   const keyboardRadii = {
-    bl: radii.bl === R ? s(16) : s(8),
-    br: radii.br === R ? s(16) : s(8)
+    bl: radii.bl === R ? s(24) : s(12),
+    br: radii.br === R ? s(24) : s(12)
   }
   // An attached inline keyboard continues the shape below the bubble. The
   // bubble-facing corners therefore become the small Telegram corners.
@@ -246,6 +247,9 @@ function drawQuote (options) {
             ? mediaRadius * k
             : { tl: mediaRadius.tl * k, tr: mediaRadius.tr * k, br: mediaRadius.br * k, bl: mediaRadius.bl * k }
           ctx.drawImage(roundImage(n.canvas, rSrc), n.x, n.y, n.w, n.h)
+        }
+        if (mediaType === 'location' || mediaType === 'venue') {
+          paintMapPoint(ctx, n.x, n.y, n.w, n.h, scale)
         }
         // Video/GIF overlays are painted in destination space so their size
         // doesn't depend on the source media resolution.
@@ -355,10 +359,19 @@ function drawQuote (options) {
     }
   }
 
-  const keyboardCanvas = hasReplyMarkup
-    ? renderReplyMarkup(replyMarkup, root.w, keyboardRadii)
-    : null
-  const keyboardGap = keyboardCanvas ? s(2) : 0
+  let keyboardCanvas = null
+  if (hasReplyMarkup) {
+    try {
+      keyboardCanvas = renderReplyMarkup(replyMarkup, root.w, keyboardRadii)
+    } catch (error) {
+      // A malformed/new button style must never make the whole message
+      // disappear. The preparation step is already best-effort; keep the
+      // same boundary around final canvas painting as well.
+      console.error('Failed to compose reply markup:', error.message, error.stack)
+      throw error
+    }
+  }
+  const keyboardGap = keyboardCanvas ? s(3) : 0
   const keyboardHeight = keyboardCanvas ? keyboardGap + keyboardCanvas.height : 0
 
   const shadowPad = s(SP.shadowPad)

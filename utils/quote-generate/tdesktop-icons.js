@@ -3,9 +3,16 @@ const { createCanvas, Image } = require('canvas')
 // Original 1x/2x/3x monochrome masks from Telegram Desktop resources:
 //   icons/chat/mini_copy[scale].png
 //   icons/inline_button_{url,switch,card,web,copy}[scale].png
+//   icons/map_point.png + icons/map_point_inner.png
 // Telegram's icon compiler treats black as transparent and white as the
 // theme colour, so decode the source luminance into an alpha mask here.
 const ICON_DATA = {
+  'map-point': {
+    44: 'iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAADB0lEQVRYhdWYQUsqURTH/+OMSYjRom+Qi5ZCG8EWSdBXqKBNH6A+w1tGSFAEUeFArVy0ad2uGAShVkEJEmhIGEImSOXgPW9RRvSqOXfu8b3eHw4InnvP7/w93OuMBYDwH8mR2GRychLz8/PIZDJIJpMYHR0FALRaLVQqFXieh0KhgLOzM4lyoLAxOztLxWKRuCoWizQzMxO63mvoL3Ich/b390kpxYbtSylFBwcH5DjO3wFOJBJUKpW0QT+qVCpRIpEYLLBt2yKw76Ft2x4ccD6fF4Pty3XdwQBPT0+HmtkgKaUom83KA3ueJw7bl+d5ssCpVGpgsH2lUikWcAQMzc3NcdKMtLCwwMpjAU9NTRnBcJTJZFh5LOBkMmkEw9H4+Dgrz8LrIH+np6cnxGIxU6Zv1e12WTVYDne7XWOgIBEF+gaACVytVo1gOLq+vmblsYBPTk6MYDg6PT1l5waefdlsduDnsMZtx7thyuXywGAvLi7YNx1rJABgb2+P/ZPpamdnRyuf1Vk0GqVmsynu7u3tLUUiEXmHfd/H9va2lhMcbW5uQimltYbdXTwep/v7ezF3G40GRaNRnX9qfIcBoNPpYGNjQ8uN75TL5eD7vvY6rQ6Hhoao0WgYu1ur1bRmF2EcBl6u6fX1dW1XPmp1dVV7dvvS7zISoZubm9DuVioVsixLuy50Lo6PsbKyEhp4aWkpLGx4YMuyqFqtasNeXl6awIYHBkDLy8vawIuLi/8OWNflq6srU1j9U+K9iAhra2vsfInTBTDs2LIsqtfrge7W63WTk0HGYeDF5d3d3cA813XZj0GBNU1jZGSEOp3Ol+4+Pj7S2NiYcR1IOAwA7XYbhULhy++Pjo7QbDYlSgEQ6BoATUxMUK/X+9ThdDotUuM1xDai4+PjP2DPz88lYWVGoq/PHnVc15UsAUCwewBUq9Xe3G232xSLxX6uwwCQz+ffPh8eHuL5+Vm6hKzD8XicHh4eSCnFfuerEzaAX5Ld+76P4eFh3N3dYWtrS3JrAMy3lz9JvwEKfuHOtsh9iQAAAABJRU5ErkJggg=='
+  },
+  'map-point-inner': {
+    44: 'iVBORw0KGgoAAAANSUhEUgAAACwAAAAsCAYAAAAehFoBAAAAz0lEQVRYhe3WMQ6DMBBE0XFaOJ+XW/lW08NZmNopEkoSReySoOyX3CHvEwJDAdBxoW7fBnxagqNLcHQJju6/wWYGkpAESSCJWqvnCACPL93h1Vrre7XWXGY81/FNaq272C0z+x0wybdgki7gsqmPtK4rhmF4eY0kjON4dNR5p0QpxWUfF/CyLG+vmefZYxQAh+fKzK710gEXO9a2NU1TJ9kldUmdpOed9Tslzuy//yXOKMHRJTi6BEeX4OgSHF2Co0twdAmOLsHRJTi6BEd3B9j9qQ/89OQEAAAAAElFTkSuQmCC'
+  },
   code: {
     16: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAABGdBTUEAALGPC/xhBQAAAJJJREFUOE+90bEJBCEQheEx2EwEA6uwBAMtxSYsYXKbsSkbEKO3IJzIcHdwwe2X+j8EJXqatTaEkBbvvTwWcs5jDLz03pVSMtqstWOMWqtzTi/XdcnoFEIA4Jxrre1LAMw5mVnWRJRSAqC1Puu9kfX3AQBZPzKIMf42MMaUUohItousT3NOUb9/pY2Zz83Hf/iXGxWw54jvnQ78AAAAAElFTkSuQmCC',
     32: 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAABGdBTUEAALGPC/xhBQAAAQBJREFUSEvt1SGOhDAYBeAG0VTigCtUIklNJafpCSjI/04cgUMgSGqxBAErmkyWlylDNzNjlk9B4H+vQFIYu/13QgillDGmO2qapixLvDuW1nocxz1gnmfOOc5cp7Xetg1Tf+n7HmeuE0L4ta/raq2VUhZHWZbhTBSllF+mtRavvYUxxhdIKRljdV1P03R4QUfOOSKK+CRd1/nJoigYY+fpD0SEQSFQgEkBzjkMCvlbwb7vGBRyF7x0F7z08YK2bf1AnucfKaiqalmWYRj8KcaEYdCJNE2TJPHHGBOGKRdhTBhOXuScw6RnIjY7QEQY9kzEdg0450R08hzRP5zbN/0Al0OeDjJuqs8AAAAASUVORK5CYII=',
@@ -92,11 +99,30 @@ function tintedTDesktopIcon (variant, size, color) {
 }
 
 function paintTDesktopIcon (ctx, variant, x, y, size, color) {
-  const icon = tintedTDesktopIcon(variant, size, color)
-  if (icon) ctx.drawImage(icon, Math.round(x), Math.round(y))
+  try {
+    const icon = tintedTDesktopIcon(variant, size, color)
+    if (!icon) return false
+    ctx.drawImage(icon, Math.round(x), Math.round(y))
+    return true
+  } catch (error) {
+    console.warn(`Failed to paint Telegram Desktop icon ${variant}:`, error.message)
+    return false
+  }
+}
+
+// history_view_location.cpp places the 44px marker horizontally centred,
+// with its bottom tip at the map's centre. The two masks use mapPointDrop
+// and mapPointDot from the Desktop palette.
+function paintMapPoint (ctx, x, y, width, height, scale = 1) {
+  const size = Math.min(44 * scale, width * 0.48, height * 0.86)
+  if (size <= 0) return
+  const left = x + (width - size) / 2
+  const top = y + height / 2 - size
+  paintTDesktopIcon(ctx, 'map-point', left, top, size, '#fd4444')
+  paintTDesktopIcon(ctx, 'map-point-inner', left, top, size, '#ffffff')
 }
 
 // Compatibility name used by code blocks and RichMessage buttons.
 const paintCopyIcon = paintTDesktopIcon
 
-module.exports = { paintCopyIcon, paintTDesktopIcon }
+module.exports = { paintCopyIcon, paintTDesktopIcon, paintMapPoint }

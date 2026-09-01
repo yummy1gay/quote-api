@@ -3,7 +3,7 @@ const sharp = require('sharp')
 const { drawMultilineText } = require('./text-renderer')
 const { renderMath } = require('./math-renderer')
 const { renderCodeBlock } = require('./code-block')
-const { paintCopyIcon } = require('./tdesktop-icons')
+const { paintCopyIcon, paintMapPoint } = require('./tdesktop-icons')
 const { drawDocumentRow, drawAudioRow, paintMediaBadges } = require('./attachments')
 const { hexToRgb, normalizeColor, lightOrDark } = require('./color')
 const loadImageFromUrl = require('../image-load-url')
@@ -419,7 +419,7 @@ function coverRoundedImage (image, width, height, radius) {
   return out
 }
 
-async function drawMedia (block, context, play = false) {
+async function drawMedia (block, context, play = false, map = false) {
   const file = findFile(context.files, mediaId(block))
   const image = await loadFileImage(file, context.imageCache)
   if (!image) return null
@@ -431,6 +431,9 @@ async function drawMedia (block, context, play = false) {
     Math.max(1, image.height * ratio),
     8 * context.scale
   )
+  if (map) {
+    paintMapPoint(media.getContext('2d'), 0, 0, media.width, media.height, context.scale)
+  }
   if (play) {
     paintMediaBadges(media.getContext('2d'), 0, 0, media.width, media.height, { play: true }, context.scale)
   }
@@ -1326,7 +1329,7 @@ async function renderBlock (block, context, depth = 0) {
   if (['photo', 'video', 'audio', 'document', 'map', 'cover'].includes(type)) {
     if (type === 'cover' && block.cover) return renderBlock(block.cover, context, depth + 1)
     if (type === 'audio' || type === 'document') return renderDocumentBlock(block, type, context)
-    const media = await drawMedia(block, context, type === 'video')
+    const media = await drawMedia(block, context, type === 'video', type === 'map')
     const caption = await drawCaption(block.caption, context)
     if (media) {
       return stack([media, caption], 8 * s)

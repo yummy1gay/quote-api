@@ -3,15 +3,18 @@ const { drawMultilineText } = require('./text-renderer')
 const { paintTDesktopIcon } = require('./tdesktop-icons')
 
 // Telegram Desktop: msgBotKbButton + botKbStyle from ui/chat/chat.style.
+// quote-api's message font is 24 logical px while Desktop's is 16, so the
+// native 15/36px keyboard metrics are scaled by the same 1.5 ratio.
+const UI_SCALE = 1.5
 const KB = {
-  gap: 2,
-  padding: 10,
-  height: 36,
-  textSize: 15,
-  icon: 10,
-  iconPadding: 4,
-  radiusSmall: 8,
-  radiusLarge: 16
+  gap: 2 * UI_SCALE,
+  padding: 10 * UI_SCALE,
+  height: 36 * UI_SCALE,
+  textSize: 15 * UI_SCALE,
+  icon: 10 * UI_SCALE,
+  iconPadding: 4 * UI_SCALE,
+  radiusSmall: 8 * UI_SCALE,
+  radiusLarge: 16 * UI_SCALE
 }
 
 function tlType (value) {

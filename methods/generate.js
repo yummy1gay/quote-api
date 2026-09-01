@@ -139,8 +139,58 @@ module.exports = async (parm) => {
   // Generate quotes with concurrency limit to avoid Telegram API rate limits
   const CONCURRENCY = 3
   const quoteImages = new Array(validMessages.length).fill(null)
+  const failures = new Array(validMessages.length).fill(null)
   let running = 0
   let nextIndex = 0
+
+  async function renderMessage (index) {
+    const message = validMessages[index]
+    try {
+      const canvas = await quoteGenerate.generate(
+        background.colorOne,
+        background.colorTwo,
+        message,
+        parm.width,
+        parm.height,
+        scale,
+        emojiBrand
+      )
+      if (!canvas) failures[index] = 'renderer returned no canvas'
+      return canvas
+    } catch (error) {
+      failures[index] = error && error.message ? error.message : String(error)
+      console.error(`Error generating quote for message ${index}:`, error && error.stack ? error.stack : error)
+
+      // Inline markup is optional chrome. A newly introduced button/style
+      // must not make the message itself unquotable; retain a last-resort
+      // render without the keyboard while keeping the original failure in
+      // the server log for diagnosis.
+      if (message.replyMarkup) {
+        try {
+          const canvas = await quoteGenerate.generate(
+            background.colorOne,
+            background.colorTwo,
+            { ...message, replyMarkup: null },
+            parm.width,
+            parm.height,
+            scale,
+            emojiBrand
+          )
+          if (canvas) {
+            console.warn(`Rendered message ${index} without reply markup after its keyboard failed`)
+            return canvas
+          }
+        } catch (fallbackError) {
+          const fallbackDetail = fallbackError && fallbackError.message
+            ? fallbackError.message
+            : String(fallbackError)
+          failures[index] += `; fallback: ${fallbackDetail}`
+          console.error(`Fallback generation failed for message ${index}:`, fallbackError && fallbackError.stack ? fallbackError.stack : fallbackError)
+        }
+      }
+      return null
+    }
+  }
 
   await new Promise((resolve) => {
     function runNext () {
@@ -148,19 +198,14 @@ module.exports = async (parm) => {
         const index = nextIndex++
         running++
 
-        quoteGenerate.generate(
-          background.colorOne,
-          background.colorTwo,
-          validMessages[index],
-          parm.width,
-          parm.height,
-          scale,
-          emojiBrand
-        ).then((canvas) => {
+        renderMessage(index).then((canvas) => {
           if (canvas) quoteImages[index] = canvas
-          else console.warn('Failed to generate quote for message, skipping')
+          else console.warn(`Failed to generate quote for message ${index}, skipping`)
         }).catch((error) => {
-          console.error('Error generating quote for message:', error.message)
+          // renderMessage is deliberately total, but preserve the scheduler
+          // if an unexpected bug escapes its boundary.
+          failures[index] = error && error.message ? error.message : String(error)
+          console.error(`Unexpected quote worker failure for message ${index}:`, error && error.stack ? error.stack : error)
         }).finally(() => {
           running--
           if (nextIndex >= validMessages.length && running === 0) resolve()
@@ -180,7 +225,9 @@ module.exports = async (parm) => {
   const filteredImages = pairs.map((p) => p.image)
 
   if (filteredImages.length === 0) {
-    return { error: 'empty_messages' }
+    const detail = failures.find(Boolean)
+    const safeDetail = detail && String(detail).replace(/[\r\n]+/g, ' ').slice(0, 500)
+    return { error: safeDetail ? `empty_messages: ${safeDetail}` : 'empty_messages' }
   }
 
   let canvasQuote
