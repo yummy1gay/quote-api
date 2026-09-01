@@ -8,6 +8,7 @@ const loadImageFromUrl = require('../image-load-url')
 const emojiDb = require('../emoji-db')
 
 const { drawMultilineText } = require('./text-renderer')
+const { renderCodeBlock } = require('./code-block')
 const { drawAvatar } = require('./avatar')
 const { downloadMediaImage } = require('./media')
 const { drawQuote } = require('./composer')
@@ -162,18 +163,28 @@ class QuoteGenerate {
     if (message.text) {
       const text = typeof message.text === 'string' ? message.text : String(message.text)
       try {
-        // Blockquote entities split the text into plain/quote runs, each
-        // rendered separately so the composer can give quotes the accent
-        // block treatment.
-        const parts = splitByBlockquotes(text, message.entities)
+        // Structural entities render as full Telegram blocks. Inline entities
+        // stay in the regular text renderer inside each surrounding run.
+        const parts = splitStructuralBlocks(text, message.entities)
         if (parts) {
           textBlocks = []
           for (const part of parts) {
-            const canvas = await drawMultilineText(
-              part.text, part.entities, fontSize, textColor,
-              0, fontSize, width, height - fontSize, emojiBrand, this.telegram
-            )
-            textBlocks.push({ canvas, quote: part.quote })
+            const canvas = part.pre
+              ? renderCodeBlock({
+                  text: part.text,
+                  language: part.language,
+                  width,
+                  fontSize: 16 * scale,
+                  scale,
+                  color: textColor,
+                  muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
+                  dark: backStyle === 'dark'
+                })
+              : await drawMultilineText(
+                part.text, part.entities, fontSize, textColor,
+                0, fontSize, width, height - fontSize, emojiBrand, this.telegram
+              )
+            textBlocks.push({ canvas, quote: part.quote, pre: part.pre })
           }
           textCanvas = textBlocks[0] && textBlocks[0].canvas // width hints below
         } else {
@@ -430,19 +441,20 @@ function gradientTint (canvas, colorFrom, colorTo) {
 }
 
 /**
- * Splits text into plain/quote runs around blockquote entities. Returns
+ * Splits text into plain/quote/pre runs around structural entities. Returns
  * null when there are none (the common case — render as a single canvas).
  * Entity offsets are UTF-16 code units, which is exactly how JS slices.
  */
-function splitByBlockquotes (text, entities) {
+function splitStructuralBlocks (text, entities) {
   if (!Array.isArray(entities)) return null
-  const quotes = entities
-    .filter((e) => e.type === 'blockquote' || e.type === 'expandable_blockquote')
+  const structuralTypes = new Set(['blockquote', 'expandable_blockquote', 'pre'])
+  const blocks = entities
+    .filter((e) => structuralTypes.has(e.type))
     .sort((a, b) => a.offset - b.offset)
-  if (quotes.length === 0) return null
+  if (blocks.length === 0) return null
 
   const sliceEntities = (start, end) => entities
-    .filter((e) => e.type !== 'blockquote' && e.type !== 'expandable_blockquote')
+    .filter((e) => !structuralTypes.has(e.type))
     .filter((e) => e.offset < end && e.offset + e.length > start)
     .map((e) => {
       const from = Math.max(e.offset, start)
@@ -452,18 +464,26 @@ function splitByBlockquotes (text, entities) {
 
   const parts = []
   let pos = 0
-  for (const q of quotes) {
-    if (q.offset < pos) continue // overlapping quotes — keep the first
-    if (q.offset > pos) {
-      const plain = text.slice(pos, q.offset).replace(/\n+$/, '')
-      if (plain) parts.push({ text: plain, entities: sliceEntities(pos, q.offset), quote: false })
+  for (const block of blocks) {
+    if (block.offset < pos) continue // overlapping blocks — keep the first
+    if (block.offset > pos) {
+      const plain = text.slice(pos, block.offset).replace(/\n+$/, '')
+      if (plain) parts.push({ text: plain, entities: sliceEntities(pos, block.offset), quote: false, pre: false })
     }
-    parts.push({ text: text.slice(q.offset, q.offset + q.length), entities: sliceEntities(q.offset, q.offset + q.length), quote: true })
-    pos = q.offset + q.length
+    parts.push({
+      text: text.slice(block.offset, block.offset + block.length),
+      entities: sliceEntities(block.offset, block.offset + block.length),
+      quote: block.type !== 'pre',
+      pre: block.type === 'pre',
+      language: block.language || ''
+    })
+    pos = block.offset + block.length
   }
   if (pos < text.length) {
-    const tail = text.slice(pos).replace(/^\n+/, '')
-    if (tail) parts.push({ text: tail, entities: sliceEntities(pos, text.length), quote: false })
+    const leadingBreaks = (text.slice(pos).match(/^\n+/) || [''])[0].length
+    const tailStart = pos + leadingBreaks
+    const tail = text.slice(tailStart)
+    if (tail) parts.push({ text: tail, entities: sliceEntities(tailStart, text.length), quote: false, pre: false })
   }
   return parts.length > 0 ? parts : null
 }

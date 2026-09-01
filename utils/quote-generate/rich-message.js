@@ -2,6 +2,7 @@ const { createCanvas, loadImage } = require('canvas')
 const sharp = require('sharp')
 const { drawMultilineText } = require('./text-renderer')
 const { renderMath } = require('./math-renderer')
+const { renderCodeBlock } = require('./code-block')
 const { drawDocumentRow, drawAudioRow, paintMediaBadges } = require('./attachments')
 const { hexToRgb, normalizeColor, lightOrDark } = require('./color')
 const loadImageFromUrl = require('../image-load-url')
@@ -66,11 +67,10 @@ function richText (node, inherited = []) {
     }
   }
   if (type === 'date') {
-    const date = new Date(Number(node.date || 0) * 1000)
-    return {
-      text: Number.isNaN(date.valueOf()) ? '' : date.toLocaleString('en-GB'),
-      entities: cloneEntities(inherited)
-    }
+    // TextDate already carries Telegram's localized fallback text. Its date
+    // may arrive as an ISO string after TL serialization, so preserve the
+    // canonical visible value instead of attempting a numeric-only parse.
+    return richText(node.text, inherited)
   }
   if (type === 'diff') {
     const oldValue = richText(node.old_text, inherited)
@@ -363,7 +363,7 @@ async function drawMixedText (node, size, color, maxWidth, maxHeight, emojiBrand
 }
 
 function mediaId (block) {
-  return block.photo_id || block.video_id || block.audio_id || block.document_id || block.poster_photo_id || block.map_file_id
+  return block.photo_id || block.video_id || block.audio_id || block.document_id || block.poster_photo_id || block.map_preview_key
 }
 
 function findFile (files, id) {
@@ -677,7 +677,7 @@ async function renderDetails (block, context, depth) {
   return out
 }
 
-async function renderMediaPlaceholder (label, context) {
+async function renderMediaPlaceholder (label, context, kind = '') {
   const s = context.scale
   const text = await drawText(
     { _: 'TextPlain', text: label },
@@ -694,17 +694,33 @@ async function renderMediaPlaceholder (label, context) {
   )
   const icon = createCanvas(30 * s, 30 * s)
   const ctx = icon.getContext('2d')
-  ctx.fillStyle = context.accent
+  ctx.fillStyle = context.link
   ctx.beginPath()
   ctx.arc(15 * s, 15 * s, 15 * s, 0, Math.PI * 2)
   ctx.fill()
   ctx.fillStyle = '#fff'
-  ctx.beginPath()
-  ctx.moveTo(12 * s, 9 * s)
-  ctx.lineTo(22 * s, 15 * s)
-  ctx.lineTo(12 * s, 21 * s)
-  ctx.closePath()
-  ctx.fill()
+  if (kind === 'map') {
+    ctx.beginPath()
+    ctx.arc(15 * s, 12 * s, 5 * s, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(10.7 * s, 15 * s)
+    ctx.lineTo(15 * s, 23 * s)
+    ctx.lineTo(19.3 * s, 15 * s)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = context.link
+    ctx.beginPath()
+    ctx.arc(15 * s, 12 * s, 2 * s, 0, Math.PI * 2)
+    ctx.fill()
+  } else {
+    ctx.beginPath()
+    ctx.moveTo(12 * s, 9 * s)
+    ctx.lineTo(22 * s, 15 * s)
+    ctx.lineTo(12 * s, 21 * s)
+    ctx.closePath()
+    ctx.fill()
+  }
   return decorate(stackRow(icon, text, 8 * s), {
     fill: context.code,
     pad: 8 * s,
@@ -748,12 +764,12 @@ function buttonType (button) {
 
 function buttonAppearance (button, context) {
   const style = button.style || {}
-  let color = context.accent
-  let fillAlpha = 0.12
-  let foreground = color
+  let color = context.buttonFill || (context.dark ? '#ffffff' : '#000000')
+  let fillAlpha = context.buttonFill ? 1 : 0.08
+  let foreground = context.buttonText || context.link || '#3390ec'
   if (style.bg_danger) color = foreground = '#e05d5d'
   else if (style.bg_primary) {
-    color = context.accent
+    color = context.link || '#3390ec'
     foreground = lightOrDark(color) === 'light' ? '#111' : '#fff'
     fillAlpha = 1
   } else if (style.bg_success) color = foreground = '#4fae78'
@@ -793,7 +809,11 @@ function paintButtonIcon (ctx, type, x, y, size, color) {
 
 async function renderInlineButton (button, labelValue, options) {
   const s = options.scale
-  const appearance = buttonAppearance(button, { accent: options.accent })
+  const dark = lightOrDark(options.color) === 'light'
+  const appearance = buttonAppearance(button, {
+    dark,
+    link: dark ? '#6ab7ec' : '#3390ec'
+  })
   const label = await drawMultilineText(
     labelValue.text,
     labelValue.entities.concat([{
@@ -1107,7 +1127,7 @@ async function renderTable (block, context) {
   ctx.clip()
   for (const placement of grid.placements) {
     if (!placement.cell.header && !(block.striped && placement.row % 2 === 0)) continue
-    ctx.fillStyle = context.tint
+    ctx.fillStyle = context.tableTint
     ctx.fillRect(
       columnStarts[placement.column],
       rowStarts[placement.row],
@@ -1220,11 +1240,15 @@ async function renderBlock (block, context, depth = 0) {
     )
   }
   if (type === 'preformatted') {
-    const pad = 10 * s
-    return decorate(await text(block.text, context.small, context.color, context.width - pad * 2, 'code'), {
-      fill: context.code,
-      pad,
-      radius: 8 * s
+    return renderCodeBlock({
+      text: richText(block.text).text,
+      language: block.language || '',
+      width: context.width,
+      fontSize: context.small,
+      scale: context.scale,
+      color: context.color,
+      muted: context.muted,
+      dark: context.dark
     })
   }
   if (type === 'authordate') {
@@ -1308,7 +1332,7 @@ async function renderBlock (block, context, depth = 0) {
       return stack([media, caption], 8 * s)
     }
     const label = type === 'map' ? 'Map' : type[0].toUpperCase() + type.slice(1)
-    return stack([await renderMediaPlaceholder(label, context), caption], 8 * s)
+    return stack([await renderMediaPlaceholder(label, context, type), caption], 8 * s)
   }
   if (type === 'collage' || type === 'slideshow') {
     return renderGroupedMedia(block, type, context)
@@ -1390,7 +1414,10 @@ async function renderRichMessage (rich, options) {
     muted: options.muted,
     accent: options.accent,
     tint: withAlpha(options.accent, 0.12),
-    border: withAlpha(options.accent, 0.36),
+    dark: options.dark,
+    link: options.dark ? '#6ab7ec' : '#3390ec',
+    border: options.dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)',
+    tableTint: options.dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.065)',
     divider: withAlpha(options.muted, options.dark ? 0.42 : 0.32),
     code: options.dark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.07)',
     width: Math.max(1, Math.floor(options.width)),

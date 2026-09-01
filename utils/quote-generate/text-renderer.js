@@ -5,6 +5,7 @@
 const { prepareText } = require('./text-prepare')
 const { shrinkWrap, getLineDirection } = require('./text-layout')
 const { renderText } = require('./text-render')
+const { resolveFormattedDates } = require('./formatted-date')
 
 /**
  * Draw multiline text with entity styling, emoji, and automatic layout.
@@ -24,7 +25,8 @@ const { renderText } = require('./text-render')
  * @returns {Canvas}
  */
 async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight, emojiBrand, telegram, customEmojiFiles, renderOptions) {
-  const prepared = await prepareText(text, entities, fontSize, emojiBrand, telegram, customEmojiFiles)
+  const resolved = resolveFormattedDates(text, entities)
+  const prepared = await prepareText(resolved.text, resolved.entities, fontSize, emojiBrand, telegram, customEmojiFiles)
 
   if (prepared.segments.length === 0) {
     const { createCanvas } = require('canvas')

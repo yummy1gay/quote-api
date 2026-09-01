@@ -47,7 +47,7 @@ function drawQuote (options) {
     reply,
     name,
     text,
-    textBlocks, // [{ canvas, quote: bool }] — text split around blockquote entities
+    textBlocks, // [{ canvas, quote, pre }] — text split around structural entities
     media,
     attachment, // pre-rendered in-bubble row canvas (voice/document/audio)
     richContent, // recursively rendered Telegram RichMessage page
@@ -214,8 +214,8 @@ function drawQuote (options) {
 
   let textNode = null
   if (Array.isArray(textBlocks) && textBlocks.length > 0 && !isQuote) {
-    // Text with blockquote entities: plain runs and quote runs stack in one
-    // column; each quote run gets the accent block treatment.
+    // Structural text runs stack in one column; only quote runs receive the
+    // sender accent treatment. Pre blocks paint their own neutral chrome.
     const parts = textBlocks.map((b) => {
       if (b.quote) return accentBlock(s, accent, { icon: true, children: [leaf(b.canvas)] })
       const l = leaf(b.canvas)
