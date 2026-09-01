@@ -770,13 +770,12 @@ function buttonAppearance (button, context) {
   const style = button.style || {}
   let color = context.buttonFill || (context.dark ? '#ffffff' : '#000000')
   let fillAlpha = context.buttonFill ? 1 : 0.08
-  let foreground = context.buttonText || context.link || '#3390ec'
-  if (style.bg_danger) color = foreground = '#e05d5d'
+  const foreground = context.dark ? '#ffffff' : '#000000'
+  if (style.bg_danger) color = '#e05d5d'
   else if (style.bg_primary) {
     color = context.link || '#3390ec'
-    foreground = lightOrDark(color) === 'light' ? '#111' : '#fff'
     fillAlpha = 1
-  } else if (style.bg_success) color = foreground = '#4fae78'
+  } else if (style.bg_success) color = '#4fae78'
   const disabled = buttonType(button) === 'disabled'
   return {
     fill: color,
