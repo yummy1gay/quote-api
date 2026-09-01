@@ -75,7 +75,6 @@ function resolveFont (styles, fontSize) {
 
   if (styles.includes('bold')) fontType += 'bold '
   else if (styles.includes('semibold')) fontType += '600 '
-  else if (styles.includes('medium')) fontType += '500 '
   if (styles.includes('italic')) fontType += 'italic '
   if (styles.includes('monospace')) fontName = 'NotoSansMono'
 

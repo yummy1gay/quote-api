@@ -143,6 +143,14 @@ function renderText (layout, prepared, fontColor, options = {}) {
           }
         }
 
+        if (seg.styles.includes('medium')) {
+          ctx.save()
+          ctx.strokeStyle = fillStyle
+          ctx.lineWidth = Math.max(0.35, fontSize * 0.025)
+          ctx.lineJoin = 'round'
+          ctx.strokeText(drawText, drawX, drawY)
+          ctx.restore()
+        }
         ctx.fillText(drawText, drawX, drawY)
 
         // Strikethrough decoration
