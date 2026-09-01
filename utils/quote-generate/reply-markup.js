@@ -18,7 +18,8 @@ const KB = {
 }
 
 function tlType (value) {
-  return String(value && value._ ? value._ : '').toLowerCase()
+  if (typeof value === 'string') return value.toLowerCase()
+  return String(value && (value._ || value.type_name || value.typeName || value.kind) ? (value._ || value.type_name || value.typeName || value.kind) : '').toLowerCase()
 }
 
 function normalizeRows (markup) {
@@ -42,11 +43,12 @@ function normalizeRows (markup) {
 function normalizeButton (button) {
   if (!button || typeof button !== 'object') return null
   const text = String(button.text == null ? '' : button.text).replace(/[\r\n]+/g, ' ')
-  const type = button.type && typeof button.type === 'object' ? button.type : button
-  const rawType = `${tlType(button)} ${tlType(type)}`
+  const type = button.type != null ? button.type : button
+  const explicitIcon = button.icon_type || button.iconType || (type && (type.icon_type || type.iconType))
+  const rawType = `${tlType(button)} ${tlType(type)} ${String(explicitIcon || '').toLowerCase()}`
 
   let icon = null
-  if (/webview/.test(rawType) || button.web_app) icon = 'web'
+  if (/webview|\bweb\b/.test(rawType) || button.web_app) icon = 'web'
   else if (/switchinline/.test(rawType) || button.switch_inline_query != null || button.switch_inline_query_current_chat != null || button.switch_inline_query_chosen_chat) icon = 'switch'
   else if (/buy/.test(rawType) || button.pay) icon = 'card'
   else if (/copy/.test(rawType) || button.copy_text) icon = 'button'
@@ -86,7 +88,7 @@ async function prepareReplyMarkup (markup, options = {}) {
           custom_emoji_id: button.customIcon
         })
       }
-      entities.push({ type: 'bold', offset: 0, length: labelText.length })
+      entities.push({ type: 'semibold', offset: 0, length: labelText.length })
       try {
         button.label = await drawMultilineText(
           labelText || ' ',
@@ -105,7 +107,7 @@ async function prepareReplyMarkup (markup, options = {}) {
         button.customIcon = null
         button.label = await drawMultilineText(
           button.text || ' ',
-          [{ type: 'bold', offset: 0, length: button.text.length }],
+          [{ type: 'semibold', offset: 0, length: button.text.length }],
           fontSize,
           '#ffffff',
           0,

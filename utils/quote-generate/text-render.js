@@ -61,7 +61,8 @@ function renderText (layout, prepared, fontColor, options = {}) {
 
       // Resolve fill style for this segment
       let fillStyle = fontColor
-      if (seg.styles.includes('monospace')) fillStyle = '#5887a7'
+      if (seg.styles.includes('media_type')) fillStyle = options.accentColor || fontColor
+      else if (seg.styles.includes('monospace')) fillStyle = '#5887a7'
       else if (seg.styles.includes('mention')) fillStyle = '#6ab7ec'
       else if (seg.styles.includes('spoiler')) {
         const rgb = hexToRgb(normalizeColor(fontColor))

@@ -268,7 +268,14 @@ function drawQuote (options) {
       children: [venue.title ? leaf(venue.title) : null, venue.address ? leaf(venue.address) : null]
     })
     : null
-  const attachmentNode = attachment ? leaf(attachment.canvas) : null
+  const isDocumentAttachment = Boolean(attachment && attachment.type === 'document')
+  const attachmentLeaf = attachment ? leaf(attachment.canvas) : null
+  // msgFileLayout starts the document a touch farther inside than ordinary
+  // message text. Keep that local inset document-only: voice and audio have
+  // their own layout geometry.
+  const attachmentNode = isDocumentAttachment && attachmentLeaf
+    ? box({ pad: { t: s(3), l: s(3) }, children: [attachmentLeaf] })
+    : attachmentLeaf
   const richNode = richContent ? leaf(richContent) : null
 
   let textNode = null
@@ -289,7 +296,12 @@ function drawQuote (options) {
   }
   // Text supplies its own air above the cap line (metric ascent slack) —
   // no extra flow gap, the name reads like the previous text line.
-  if (textNode && !isQuote) textNode.mt = 0
+  if (textNode && !isQuote) {
+    // A document's message text is its caption. Desktop places it after the
+    // file row's bottom padding; the generic zero-gap text rule made captions
+    // stick directly to the enlarged icon.
+    textNode.mt = isDocumentAttachment ? s(12) : 0
+  }
 
   // ---- Tree ---------------------------------------------------------------
 

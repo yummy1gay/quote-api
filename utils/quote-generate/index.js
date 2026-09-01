@@ -240,6 +240,7 @@ class QuoteGenerate {
 
         const normalizedReplyName = replyName.replace(/[\r\n]/g, ' ')
         const normalizedReplyText = replyText.replace(/[\r\n]/g, ' ')
+        const replyIconName = String(message.replyMessage.icon || '')
 
         const replyNameFontSize = 14 * scale
         const replyNameCanvas = await drawMultilineText(
@@ -251,7 +252,10 @@ class QuoteGenerate {
         const replyTextCanvas = await drawMultilineText(
           normalizedReplyText, message.replyMessage.entities || [],
           replyTextFontSize, textColor,
-          0, replyTextFontSize, width * 0.9, replyTextFontSize, emojiBrand, this.telegram
+          0, replyTextFontSize,
+          Math.max(replyTextFontSize * 4, width * 0.9 - (replyIconName ? 21 * scale : 0)),
+          replyTextFontSize, emojiBrand, this.telegram, null,
+          { accentColor: replyNameColor }
         )
 
         if (replyNameCanvas && replyTextCanvas) {
@@ -263,8 +267,9 @@ class QuoteGenerate {
             text: replyTextCanvas
           }
 
-          const replyIconName = { document: 'file', file: 'file', audio: 'note', music: 'note', video: 'play' }[message.replyMessage.icon]
-          if (replyIconName) replyData.icon = drawReplyIcon(replyIconName, 16 * scale, replyNameColor)
+          if (replyIconName) {
+            replyData.icon = drawReplyIcon(replyIconName, 18 * scale, replyNameColor)
+          }
 
           if (resolvedReplyColor.backgroundEmojiId || resolvedReplyColor.giftEmojiId) {
             const [backgroundEmoji, giftEmoji] = await Promise.all([
@@ -376,15 +381,19 @@ class QuoteGenerate {
 
     // Row-style attachments (rendered inside the bubble, like Telegram).
     let attachment = null
+    let attachmentType = null
     const attachMaxW = width * 2 / 3
     if (message.voice && Array.isArray(message.voice.waveform)) {
+      attachmentType = 'voice'
       attachment = drawVoiceRow(
         message.voice.waveform, message.voice.duration,
         nameColor, textColor, scale, attachMaxW
       )
     } else if (message.document) {
+      attachmentType = 'document'
       attachment = drawDocumentRow(message.document, nameColor, textColor, scale, attachMaxW)
     } else if (message.audio) {
+      attachmentType = 'audio'
       let audioThumb = null
       const thumbId = message.audio.thumb && (message.audio.thumb.file_id || message.audio.thumb)
       if (thumbId) {
@@ -462,7 +471,7 @@ class QuoteGenerate {
       textBlocks,
       media: mediaCanvas ? { canvas: mediaCanvas, type: mediaType, maxSize: maxMediaSize, badge: mediaBadge } : null,
       venue,
-      attachment: attachment ? { canvas: attachment } : null,
+      attachment: attachment ? { canvas: attachment, type: attachmentType } : null,
       richContent,
       replyMarkup,
       isForward,

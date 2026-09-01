@@ -9,6 +9,7 @@ const path = require('path')
 const { createCanvas, loadImage } = require('canvas')
 const sharp = require('sharp')
 const { drawLabel } = require('./canvas-utils')
+const { paintTDesktopIcon } = require('./tdesktop-icons')
 const loadImageFromUrl = require('../image-load-url')
 
 // The same SF Symbols used by Telegram-iOS, exported from the local symbols
@@ -101,7 +102,8 @@ const ROW = {
   disc: 44, // Telegram-iOS progressDiameter
   voiceDisc: 40, // preserve the existing voice waveform geometry
   gap: 11, // voice control → waveform spacing
-  fileGap: 8, // Telegram-iOS file control → text spacing
+  fileGap: 8, // audio control → text spacing
+  documentGap: 11, // tdesktop msgFileLayout.thumbSkip
   title: 16, // first line (file name, track title)
   meta: 13, // second line (size, performer, duration)
   metaAlpha: 0.55,
@@ -292,7 +294,14 @@ function drawDocumentRow (doc, accent, textColor, scale, maxWidth) {
 
   const title = drawLabel(name, s(ROW.title), textColor, { bold: true })
   const meta = metaText ? drawLabel(metaText, s(ROW.meta), textColor, { alpha: ROW.metaAlpha }) : null
-  return assembleRow(drawFileDisc(d, accent), title, meta, documentScale, maxWidth)
+  return assembleRow(
+    drawFileDisc(d, accent),
+    title,
+    meta,
+    documentScale,
+    maxWidth,
+    ROW.documentGap
+  )
 }
 
 /**
@@ -361,9 +370,9 @@ function drawAudioRow (audio, accent, textColor, scale, maxWidth, thumb) {
 }
 
 // [disc] + up to two text lines, vertically centered against the disc.
-function assembleRow (disc, title, meta, scale, maxWidth) {
+function assembleRow (disc, title, meta, scale, maxWidth, gapValue = ROW.fileGap) {
   const s = (v) => v * scale
-  const gap = s(ROW.fileGap)
+  const gap = s(gapValue)
   const textW = Math.max(title.width, meta ? meta.width : 0)
   let w = Math.ceil(disc.width + gap + textW)
   // Telegram reserves the full available file row even for short names.
@@ -466,9 +475,33 @@ function paintMediaBadges (ctx, x, y, w, h, badge, scale) {
 }
 
 function drawReplyIcon (name, size, color) {
-  if (!ICON_FILES[name]) return null
+  const desktopVariant = {
+    document: 'reply-file',
+    file: 'reply-file',
+    audio: 'reply-audio',
+    music: 'reply-audio',
+    location: 'reply-location',
+    contact: 'reply-contact',
+    poll: 'reply-poll',
+    todo: 'reply-todo',
+    invoice: 'reply-invoice',
+    paid: 'reply-invoice',
+    call_outgoing: 'reply-call-outgoing',
+    call_incoming: 'reply-call-incoming',
+    video_call_outgoing: 'reply-video-call-outgoing',
+    video_call_incoming: 'reply-video-call-incoming',
+    story: 'reply-story',
+    giveaway: 'reply-giveaway',
+    game: 'reply-game',
+    video_stream: 'reply-video-stream'
+  }[name]
+  if (!desktopVariant && !ICON_FILES[name]) return null
   const canvas = createCanvas(size, size)
   const ctx = canvas.getContext('2d')
+  if (desktopVariant) {
+    paintTDesktopIcon(ctx, desktopVariant, 0, 0, size, color)
+    return canvas
+  }
   const glyphSize = name === 'play' ? size * 0.8 : size * 0.92
   const dx = name === 'play' ? size * 0.04 : 0
   paintIcon(

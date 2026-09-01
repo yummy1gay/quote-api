@@ -74,6 +74,7 @@ function resolveFont (styles, fontSize) {
   let fontName = 'NotoSans'
 
   if (styles.includes('bold')) fontType += 'bold '
+  else if (styles.includes('semibold')) fontType += '600 '
   if (styles.includes('italic')) fontType += 'italic '
   if (styles.includes('monospace')) fontName = 'NotoSansMono'
 
