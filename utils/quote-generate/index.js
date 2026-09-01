@@ -143,7 +143,7 @@ class QuoteGenerate {
       try {
         richContent = await renderRichMessage(message.richMessage, {
           scale,
-          width: width * 2 / 3,
+          width,
           height: height - fontSize,
           color: textColor,
           muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',

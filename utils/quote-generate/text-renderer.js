@@ -23,7 +23,7 @@ const { renderText } = require('./text-render')
  * @param {object} customEmojiFiles - Rich-message document previews keyed by ID
  * @returns {Canvas}
  */
-async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight, emojiBrand, telegram, customEmojiFiles) {
+async function drawMultilineText (text, entities, fontSize, fontColor, textX, textY, maxWidth, maxHeight, emojiBrand, telegram, customEmojiFiles, renderOptions) {
   const prepared = await prepareText(text, entities, fontSize, emojiBrand, telegram, customEmojiFiles)
 
   if (prepared.segments.length === 0) {
@@ -34,7 +34,7 @@ async function drawMultilineText (text, entities, fontSize, fontColor, textX, te
   // Use shrink-wrap for multi-line text, plain layout for single-line
   const layout = shrinkWrap(prepared, maxWidth, maxHeight)
 
-  return renderText(layout, prepared, fontColor)
+  return renderText(layout, prepared, fontColor, renderOptions)
 }
 
 module.exports = { drawMultilineText, getLineDirection }

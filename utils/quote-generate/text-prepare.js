@@ -295,6 +295,10 @@ function tokenize (text, styledChars, fontSize, emojiMap, customEmojiMap) {
         (cur.emoji && !prev.emoji) ||
         (!cur.emoji && prev.emoji) ||
         (cur.emoji && prev.emoji && cur.emoji.index !== prev.emoji.index) ||
+        // Adjacent custom emoji can share the same Unicode style/grapheme
+        // shape while referring to different Telegram documents.
+        (cur.customEmojiId !== prev.customEmojiId) ||
+        (cur.inlineButtonImage !== prev.inlineButtonImage) ||
         // Style change
         (cur.styles.toString() !== prev.styles.toString())
       ))

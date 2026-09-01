@@ -316,6 +316,35 @@ function drawAudioRow (audio, accent, textColor, scale, maxWidth, thumb) {
     ctx.imageSmoothingQuality = 'high'
     const side = Math.min(thumb.width, thumb.height)
     ctx.drawImage(thumb, (thumb.width - side) / 2, (thumb.height - side) / 2, side, side, 0, 0, d, d)
+
+    // tdesktop keeps the playback affordance on top of album art. Without it
+    // a rich-message audio block looks like an ordinary thumbnail.
+    const button = d * 0.58
+    const cx = d / 2
+    const cy = d / 2
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.48)'
+    ctx.beginPath()
+    ctx.arc(cx, cy, button / 2, 0, Math.PI * 2)
+    ctx.fill()
+    const iconSize = button * 0.48
+    paintIcon(
+      ctx,
+      'play',
+      cx - iconSize / 2 + button * 0.035,
+      cy - iconSize / 2,
+      iconSize,
+      '#fff',
+      () => {
+        const r = button * 0.24
+        ctx.fillStyle = '#fff'
+        ctx.beginPath()
+        ctx.moveTo(cx - r * 0.62, cy - r)
+        ctx.lineTo(cx - r * 0.62, cy + r)
+        ctx.lineTo(cx + r * 1.05, cy)
+        ctx.closePath()
+        ctx.fill()
+      }
+    )
   } else {
     lead = drawNoteDisc(d, accent)
   }

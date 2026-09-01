@@ -95,7 +95,7 @@ function richText (node, inherited = []) {
     strike: 'strikethrough',
     fixed: 'code',
     spoiler: 'spoiler',
-    marked: 'bold',
+    marked: 'marked',
     url: 'text_link',
     email: 'email',
     phone: 'phone_number',
@@ -131,6 +131,30 @@ function stack (canvases, gap = 10, padding = 0) {
     ctx.drawImage(canvas, padding, y)
     y += canvas.height + gap
   }
+  return out
+}
+
+function stackCentered (canvases, gap = 10, padding = 0) {
+  const items = canvases.filter(canvas => canvas && canvas.width && canvas.height)
+  if (!items.length) return null
+  const width = Math.max(...items.map(canvas => canvas.width)) + padding * 2
+  const height = items.reduce((sum, canvas) => sum + canvas.height, 0) + gap * (items.length - 1) + padding * 2
+  const out = createCanvas(Math.ceil(width), Math.ceil(height))
+  const ctx = out.getContext('2d')
+  let y = padding
+  for (const canvas of items) {
+    ctx.drawImage(canvas, (out.width - canvas.width) / 2, y)
+    y += canvas.height + gap
+  }
+  return out
+}
+
+function centerCanvas (canvas, width) {
+  if (!canvas) return null
+  const outWidth = Math.max(canvas.width, Math.ceil(width))
+  if (outWidth === canvas.width) return canvas
+  const out = createCanvas(outWidth, canvas.height)
+  out.getContext('2d').drawImage(canvas, (out.width - canvas.width) / 2, 0)
   return out
 }
 
@@ -218,7 +242,8 @@ async function drawText (node, size, color, maxWidth, maxHeight, emojiBrand, tel
     maxHeight,
     emojiBrand,
     telegram,
-    files
+    files,
+    { markColor: accent || color }
   )
 }
 
@@ -247,22 +272,60 @@ function mixedRuns (node, styles = [], result = []) {
     result.push({ text: node.text || '', styles })
     return result
   }
+  if (['customemoji', 'date', 'button', 'diff', 'image'].includes(type)) {
+    result.push({ value: richText(node), styles })
+    return result
+  }
   const style = {
     bold: 'bold',
     italic: 'italic',
     underline: 'underline',
     strike: 'strikethrough',
     fixed: 'code',
-    spoiler: 'spoiler'
+    spoiler: 'spoiler',
+    marked: 'marked',
+    url: 'mention',
+    email: 'mention',
+    phone: 'mention',
+    mention: 'mention',
+    hashtag: 'mention',
+    botcommand: 'mention',
+    cashtag: 'mention',
+    autourl: 'mention',
+    autoemail: 'mention',
+    autophone: 'mention',
+    mentionname: 'mention',
+    subscript: 'italic',
+    superscript: 'italic'
   }[type]
   return mixedRuns(node.text, style ? styles.concat(style) : styles, result)
 }
 
-async function drawMixedText (node, size, color, maxWidth, maxHeight, emojiBrand, telegram, files) {
+async function drawMixedText (node, size, color, maxWidth, maxHeight, emojiBrand, telegram, files, accent) {
   const items = []
   for (const run of mixedRuns(node)) {
     if (run.math != null) {
       items.push(renderMath(run.math, { fontSize: size, color, maxWidth, display: false }))
+      continue
+    }
+    if (run.value) {
+      const entities = run.value.entities.concat(
+        run.styles.map(type => ({ type, offset: 0, length: utf16Length(run.value.text) }))
+      )
+      items.push(await drawMultilineText(
+        run.value.text,
+        entities,
+        size,
+        color,
+        0,
+        size,
+        maxWidth,
+        maxHeight,
+        emojiBrand,
+        telegram,
+        files,
+        { markColor: accent || color }
+      ))
       continue
     }
     for (const token of String(run.text || '').split(/(\s+)/).filter(Boolean)) {
@@ -278,7 +341,8 @@ async function drawMixedText (node, size, color, maxWidth, maxHeight, emojiBrand
         maxHeight,
         emojiBrand,
         telegram,
-        files
+        files,
+        { markColor: accent || color }
       ))
     }
   }
@@ -299,7 +363,7 @@ async function drawMixedText (node, size, color, maxWidth, maxHeight, emojiBrand
 }
 
 function mediaId (block) {
-  return block.photo_id || block.video_id || block.audio_id || block.document_id || block.poster_photo_id
+  return block.photo_id || block.video_id || block.audio_id || block.document_id || block.poster_photo_id || block.map_file_id
 }
 
 function findFile (files, id) {
@@ -337,18 +401,50 @@ function clipRoundedImage (image, width, height, radius) {
   return out
 }
 
-async function drawMedia (block, context) {
+function coverRoundedImage (image, width, height, radius) {
+  const out = createCanvas(Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(height)))
+  const ctx = out.getContext('2d')
+  ctx.beginPath()
+  roundedRect(ctx, 0, 0, out.width, out.height, radius)
+  ctx.clip()
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  const ratio = Math.max(out.width / image.width, out.height / image.height)
+  const sourceWidth = out.width / ratio
+  const sourceHeight = out.height / ratio
+  const sourceX = (image.width - sourceWidth) / 2
+  const sourceY = (image.height - sourceHeight) / 2
+  ctx.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, out.width, out.height)
+  return out
+}
+
+async function drawMedia (block, context, play = false) {
   const file = findFile(context.files, mediaId(block))
   const image = await loadFileImage(file, context.imageCache)
   if (!image) return null
   const maxHeight = 360 * context.scale
-  const ratio = Math.min(1, context.width / image.width, maxHeight / image.height)
-  return clipRoundedImage(
+  const ratio = Math.min(context.width / image.width, maxHeight / image.height)
+  const media = clipRoundedImage(
     image,
     Math.max(1, image.width * ratio),
     Math.max(1, image.height * ratio),
     8 * context.scale
   )
+  if (play) {
+    paintMediaBadges(media.getContext('2d'), 0, 0, media.width, media.height, { play: true }, context.scale)
+  }
+  return centerCanvas(media, context.width)
+}
+
+async function drawGroupedMediaTile (block, width, height, context) {
+  const file = findFile(context.files, mediaId(block))
+  const image = await loadFileImage(file, context.imageCache)
+  if (!image) return null
+  const tile = coverRoundedImage(image, width, height, 3 * context.scale)
+  if (typeOf(block) === 'video') {
+    paintMediaBadges(tile.getContext('2d'), 0, 0, tile.width, tile.height, { play: true }, context.scale)
+  }
+  return tile
 }
 
 async function drawCaption (caption, context) {
@@ -381,6 +477,145 @@ async function drawCaption (caption, context) {
       context.scale
     )
   ], 3 * context.scale)
+}
+
+function paintQuoteGlyph (ctx, x, y, size, color, closing = false) {
+  ctx.save()
+  ctx.fillStyle = color
+  ctx.font = `bold ${size}px NotoSans`
+  ctx.textAlign = closing ? 'right' : 'left'
+  ctx.textBaseline = 'top'
+  ctx.fillText(closing ? '”' : '“', x, y)
+  ctx.restore()
+}
+
+async function renderQuoteBlock (block, context, depth, containsBlocks = false) {
+  const s = context.scale
+  const left = 10 * s
+  const right = 20 * s
+  const top = 3 * s
+  const bottom = 4 * s
+  const innerWidth = Math.max(1, context.width - left - right)
+  const body = containsBlocks
+    ? await renderBlocks(block.blocks, { ...context, width: innerWidth }, depth + 1)
+    : await drawText(
+      block.text,
+      context.font,
+      context.color,
+      innerWidth,
+      context.height,
+      context.emojiBrand,
+      context.telegram,
+      null,
+      context.files,
+      context.accent,
+      context.scale
+    )
+  const caption = await drawText(
+    block.caption,
+    context.small,
+    context.muted,
+    innerWidth,
+    context.height,
+    context.emojiBrand,
+    context.telegram,
+    null,
+    context.files,
+    context.accent,
+    context.scale
+  )
+  const content = stack([body, caption], 4 * s)
+  if (!content) return null
+  const out = createCanvas(
+    Math.max(1, Math.ceil(context.width)),
+    Math.max(1, Math.ceil(content.height + top + bottom))
+  )
+  const ctx = out.getContext('2d')
+  ctx.fillStyle = context.tint
+  ctx.beginPath()
+  roundedRect(ctx, 0, 0, out.width, out.height, 7 * s)
+  ctx.fill()
+  ctx.fillStyle = context.accent
+  ctx.beginPath()
+  roundedRect(ctx, 0, 0, 3 * s, out.height, 1.5 * s)
+  ctx.fill()
+  paintQuoteGlyph(ctx, out.width - 5 * s, 1 * s, 18 * s, context.accent, true)
+  ctx.drawImage(content, left, top)
+  return out
+}
+
+async function renderPullquote (block, context) {
+  const s = context.scale
+  const inset = 22 * s
+  const innerWidth = Math.max(1, Math.min(280 * s, context.width - inset * 2))
+  const body = await drawText(
+    block.text,
+    context.font,
+    context.color,
+    innerWidth,
+    context.height,
+    context.emojiBrand,
+    context.telegram,
+    'italic',
+    context.files,
+    context.accent,
+    context.scale
+  )
+  const caption = await drawText(
+    block.caption,
+    context.small,
+    context.muted,
+    innerWidth,
+    context.height,
+    context.emojiBrand,
+    context.telegram,
+    null,
+    context.files,
+    context.accent,
+    context.scale
+  )
+  const content = stackCentered([body, caption], 4 * s)
+  if (!content) return null
+  const cardWidth = Math.min(context.width, Math.max(content.width + inset * 2, 84 * s))
+  const cardHeight = content.height + 16 * s
+  const out = createCanvas(Math.max(1, Math.ceil(context.width)), Math.max(1, Math.ceil(cardHeight)))
+  const ctx = out.getContext('2d')
+  const x = (out.width - cardWidth) / 2
+  ctx.fillStyle = context.tint
+  ctx.beginPath()
+  roundedRect(ctx, x, 0, cardWidth, cardHeight, 7 * s)
+  ctx.fill()
+  paintQuoteGlyph(ctx, x + 7 * s, 1 * s, 18 * s, context.accent)
+  paintQuoteGlyph(ctx, x + cardWidth - 7 * s, cardHeight - 21 * s, 18 * s, context.accent, true)
+  ctx.drawImage(content, (out.width - content.width) / 2, 8 * s)
+  return out
+}
+
+async function renderGroupedMedia (block, type, context) {
+  const s = context.scale
+  const items = (block.items || []).filter(Boolean)
+  if (!items.length) return drawCaption(block.caption, context)
+  let media
+  if (type === 'slideshow') {
+    const height = Math.min(360 * s, Math.max(160 * s, context.width * 9 / 16))
+    media = await drawGroupedMediaTile(items[0], context.width, height, context)
+  } else {
+    const gap = 2 * s
+    const rows = []
+    for (let i = 0; i < items.length; i += 2) {
+      const pair = items.slice(i, i + 2)
+      if (pair.length === 1) {
+        const height = Math.min(360 * s, Math.max(160 * s, context.width * 9 / 16))
+        rows.push(await drawGroupedMediaTile(pair[0], context.width, height, context))
+        continue
+      }
+      const tileWidth = (context.width - gap) / 2
+      const tiles = await Promise.all(pair.map(item => drawGroupedMediaTile(item, tileWidth, tileWidth, context)))
+      rows.push(stackRow(...tiles, gap, 'top'))
+    }
+    media = stack(rows, gap)
+  }
+  return stack([media, await drawCaption(block.caption, context)], 8 * s)
 }
 
 async function renderDetails (block, context, depth) {
@@ -497,7 +732,7 @@ async function renderDocumentBlock (block, type, context) {
   }
   const card = decorate(row, {
     fill: context.code,
-    stroke: context.border,
+    stroke: type === 'audio' ? null : context.border,
     lineWidth: Math.max(1, s),
     pad: 7 * s,
     radius: 8 * s
@@ -975,11 +1210,14 @@ async function renderBlock (block, context, depth = 0) {
   if (type === 'paragraph' || type === 'thinking') {
     const textColor = type === 'thinking' ? context.muted : context.color
     return hasMath(block.text)
-      ? drawMixedText(block.text, context.font, textColor, context.width, context.height, context.emojiBrand, context.telegram, context.files)
+      ? drawMixedText(block.text, context.font, textColor, context.width, context.height, context.emojiBrand, context.telegram, context.files, context.accent)
       : text(block.text, context.font, textColor, context.width, type === 'thinking' ? 'italic' : null)
   }
   if (type === 'math') {
-    return renderMath(block.source, { fontSize: context.font * 1.12, color: context.color, maxWidth: context.width, display: true })
+    return centerCanvas(
+      renderMath(block.source, { fontSize: context.font * 1.12, color: context.color, maxWidth: context.width, display: true }),
+      context.width
+    )
   }
   if (type === 'preformatted') {
     const pad = 10 * s
@@ -1000,32 +1238,9 @@ async function renderBlock (block, context, depth = 0) {
     out.getContext('2d').fillRect(0, 0, out.width, out.height)
     return out
   }
-  if (type === 'blockquote' || type === 'pullquote') {
-    const innerWidth = context.width - 26 * s
-    const body = await text(block.text, context.font, context.color, innerWidth, type === 'pullquote' ? 'italic' : null)
-    const caption = await text(block.caption, context.small, context.muted, innerWidth)
-    return decorate(stack([body, caption], 4 * s), {
-      fill: context.tint,
-      bar: context.accent,
-      barWidth: 3 * s,
-      barGap: 3 * s,
-      pad: 8 * s,
-      radius: 8 * s
-    })
-  }
-  if (type === 'blockquoteblocks') {
-    const innerWidth = context.width - 26 * s
-    const body = await renderBlocks(block.blocks, { ...context, width: innerWidth }, depth + 1)
-    const caption = await text(block.caption, context.small, context.muted, innerWidth)
-    return decorate(stack([body, caption], 5 * s), {
-      fill: context.tint,
-      bar: context.accent,
-      barWidth: 3 * s,
-      barGap: 3 * s,
-      pad: 8 * s,
-      radius: 8 * s
-    })
-  }
+  if (type === 'blockquote') return renderQuoteBlock(block, context, depth)
+  if (type === 'pullquote') return renderPullquote(block, context)
+  if (type === 'blockquoteblocks') return renderQuoteBlock(block, context, depth, true)
   if (type === 'list' || type === 'orderedlist') {
     const rendered = []
     let index = Number(block.start || 1)
@@ -1087,21 +1302,16 @@ async function renderBlock (block, context, depth = 0) {
   if (['photo', 'video', 'audio', 'document', 'map', 'cover'].includes(type)) {
     if (type === 'cover' && block.cover) return renderBlock(block.cover, context, depth + 1)
     if (type === 'audio' || type === 'document') return renderDocumentBlock(block, type, context)
-    const media = await drawMedia(block, context)
+    const media = await drawMedia(block, context, type === 'video')
     const caption = await drawCaption(block.caption, context)
     if (media) {
-      if (type === 'video') paintMediaBadges(media.getContext('2d'), 0, 0, media.width, media.height, { play: true }, s)
       return stack([media, caption], 8 * s)
     }
     const label = type === 'map' ? 'Map' : type[0].toUpperCase() + type.slice(1)
     return stack([await renderMediaPlaceholder(label, context), caption], 8 * s)
   }
   if (type === 'collage' || type === 'slideshow') {
-    const items = []
-    for (const item of block.items || []) {
-      items.push(await renderBlock(item, { ...context, width: context.width / 2 - s }, depth + 1))
-    }
-    return stack([stackGrid(items, context.width, 2 * s), await drawCaption(block.caption, context)], 8 * s)
+    return renderGroupedMedia(block, type, context)
   }
   if (type === 'embedpost') {
     const inner = await renderBlocks(block.blocks, { ...context, width: context.width - 24 * s }, depth + 1)
@@ -1160,26 +1370,6 @@ function stackRow (...args) {
     ctx.drawImage(item, x, y)
     x += item.width + gap
   }
-  return out
-}
-
-function stackGrid (items, width, gap) {
-  const rows = []
-  const filtered = items.filter(Boolean)
-  for (let i = 0; i < filtered.length; i += 2) {
-    let row = stackRow(filtered[i], filtered[i + 1], gap, 'top')
-    if (row && row.width > width) row = resize(row, width)
-    rows.push(row)
-  }
-  return stack(rows, gap)
-}
-
-function resize (canvas, width) {
-  const out = createCanvas(Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(canvas.height * width / canvas.width)))
-  const ctx = out.getContext('2d')
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(canvas, 0, 0, out.width, out.height)
   return out
 }
 

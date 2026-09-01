@@ -15,10 +15,26 @@ function colorizeEmoji (image, color, size) {
   return canvas
 }
 
+function roundedRect (ctx, x, y, width, height, radius) {
+  const r = Math.max(0, Math.min(radius, width / 2, height / 2))
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + width, y, x + width, y + height, r)
+  ctx.arcTo(x + width, y + height, x, y + height, r)
+  ctx.arcTo(x, y + height, x, y, r)
+  ctx.arcTo(x, y, x + width, y, r)
+  ctx.closePath()
+}
+
+function withAlpha (color, alpha) {
+  const rgb = hexToRgb(normalizeColor(color))
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`
+}
+
 /**
  * Render laid-out text to a canvas.
  */
-function renderText (layout, prepared, fontColor) {
+function renderText (layout, prepared, fontColor, options = {}) {
   const { lines, width, height } = layout
   const { segments, fontSize, emojiSize } = prepared
 
@@ -70,6 +86,24 @@ function renderText (layout, prepared, fontColor) {
       }
 
       const drawY = line.y
+
+      if (seg.styles.includes('marked')) {
+        const top = drawY - prepared.ascent
+        const markedWidth = Math.max(1, layoutSeg.width + fontSize * 0.18)
+        const markedHeight = Math.max(1, prepared.ascent + prepared.descent)
+        ctx.save()
+        ctx.fillStyle = withAlpha(options.markColor || fontColor, 0.16)
+        roundedRect(
+          ctx,
+          drawX - fontSize * 0.09,
+          top,
+          markedWidth,
+          markedHeight,
+          fontSize * 0.16
+        )
+        ctx.fill()
+        ctx.restore()
+      }
 
       if (seg.kind === 'inline_button' && seg.inlineButtonImage) {
         const lineBoxHeight = prepared.ascent + prepared.descent
