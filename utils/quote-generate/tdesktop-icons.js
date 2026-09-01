@@ -1,5 +1,9 @@
 const { createCanvas, Image } = require('canvas')
 
+// Telegram Desktop Resources/icons/chat/mini_quote@3x.png. This is the
+// actual 16x12 message-quote mask (stored at 3x), not a font approximation.
+const MINI_QUOTE_DATA = 'iVBORw0KGgoAAAANSUhEUgAAADAAAAAkCAIAAABAJy5dAAAACXBIWXMAAAsTAAALEwEAmpwYAAAE7mlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgOS4xLWMwMDEgNzkuMTQ2Mjg5OSwgMjAyMy8wNi8yNS0yMDowMTo1NSAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iIHhtbG5zOnBob3Rvc2hvcD0iaHR0cDovL25zLmFkb2JlLmNvbS9waG90b3Nob3AvMS4wLyIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0RXZ0PSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VFdmVudCMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDI1LjAgKFdpbmRvd3MpIiB4bXA6Q3JlYXRlRGF0ZT0iMjAyMy0xMC0xM1QxNToxMDo1NiswNDowMCIgeG1wOk1vZGlmeURhdGU9IjIwMjMtMTAtMjhUMjA6Mzg6MzcrMDQ6MDAiIHhtcDpNZXRhZGF0YURhdGU9IjIwMjMtMTAtMjhUMjA6Mzg6MzcrMDQ6MDAiIGRjOmZvcm1hdD0iaW1hZ2UvcG5nIiBwaG90b3Nob3A6Q29sb3JNb2RlPSIzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOmE5MmYzMThiLThjMTAtOGU0Ny05ZTcyLTZjNjA2NGUyNTM1MSIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDphOTJmMzE4Yi04YzEwLThlNDctOWU3Mi02YzYwNjRlMjUzNTEiIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDphOTJmMzE4Yi04YzEwLThlNDctOWU3Mi02YzYwNjRlMjUzNTEiPiA8eG1wTU06SGlzdG9yeT4gPHJkZjpTZXE+IDxyZGY6bGkgc3RFdnQ6YWN0aW9uPSJjcmVhdGVkIiBzdEV2dDppbnN0YW5jZUlEPSJ4bXAuaWlkOmE5MmYzMThiLThjMTAtOGU0Ny05ZTcyLTZjNjA2NGUyNTM1MSIgc3RFdnQ6d2hlbj0iMjAyMy0xMC0xM1QxNToxMDo1NiswNDowMCIgc3RFdnQ6c29mdHdhcmVBZ2VudD0iQWRvYmUgUGhvdG9zaG9wIDI1LjAgKFdpbmRvd3MpIi8+IDwvcmRmOlNlcT4gPC94bXBNTTpIaXN0b3J5PiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PnH8D+4AAAIwSURBVFjD7ZZLyzFhHMYf5xzKClmIED4BWdjZSCHF1vmQJeJxWCtiaynlG4ilDUrJjmz4AmJFCTk8/1KaZszM++R+Nm9zrWbxa65r7vue/3V/fTFixIgRmfR6fTweLxQKgUBAqVRSw2q1OhKJABwOh1UqFeIoIpGo2Ww+MLpcLsVikcPhEGE+n1+r1W632wuG50qlwuPxkKWZz+ePd+r1ejiYy+VOJpO38Gg0evsBv1aj0XiQKxqNYuFSqUQB53K5T9PA9mMXn6jdbger8oSlUunpdKKAj8ejRCL5KFAwGHzQyWKxPGGXy0ULOxyOjwLl83laD6/X+4RjsRgtjNviX8vv99N6APOE7XY7LZxMJj8KZDAYaD18Pt8TlslktHAikfj0XPf7/X8MBOp0On8eSKvV7vd7Cg+32/2CFQrFdrulgEOhEIJRZDKZlsslmQdUChbWaDSz2YwMNpvNaOa1UCj0eDztdhtnAIvHYrGI7eF0OnFtA7per/AelKVmtVpxHsPhkAw2Go04eLFYIG7ZcrmM84BiIYNTqRQObrVaiAONx2OyMU1Ut9tFPKZx0ul09/sda7BarchguVx+Pp+x8GazebUeGhFr//v7mwwm1n61WkWZBn4lKHasAcwbiuper9dY+HA4wBxHGUggEMBPi/XIZrMUPG6Wwo0R/Z26Xq+/DAaDAQwbChi7ZdPpVCwW/8k932azZTIZmJBsNpsWhqGcTqfhLoD4LDNixOg/0w+VYeuoN++/8gAAAABJRU5ErkJggg=='
+
 // Original 1x/2x/3x monochrome masks from Telegram Desktop resources:
 //   icons/chat/mini_copy[scale].png
 //   icons/inline_button_{url,switch,card,web,copy}[scale].png
@@ -95,6 +99,8 @@ const ICON_DATA = {
 
 const masks = new Map()
 const tinted = new Map()
+let miniQuoteMask = null
+const tintedMiniQuotes = new Map()
 
 function iconMask (variant, dimension) {
   const sources = ICON_DATA[variant]
@@ -161,6 +167,56 @@ function paintTDesktopIcon (ctx, variant, x, y, size, color) {
   }
 }
 
+function getMiniQuoteMask () {
+  if (miniQuoteMask) return miniQuoteMask
+  const image = new Image()
+  image.src = Buffer.from(MINI_QUOTE_DATA, 'base64')
+  const mask = createCanvas(image.width, image.height)
+  const ctx = mask.getContext('2d')
+  ctx.drawImage(image, 0, 0)
+  const pixels = ctx.getImageData(0, 0, mask.width, mask.height)
+  for (let index = 0; index < pixels.data.length; index += 4) {
+    const sourceAlpha = pixels.data[index + 3]
+    const luminance = Math.max(pixels.data[index], pixels.data[index + 1], pixels.data[index + 2])
+    pixels.data[index] = 255
+    pixels.data[index + 1] = 255
+    pixels.data[index + 2] = 255
+    pixels.data[index + 3] = Math.round(sourceAlpha * luminance / 255)
+  }
+  ctx.clearRect(0, 0, mask.width, mask.height)
+  ctx.putImageData(pixels, 0, 0)
+  miniQuoteMask = mask
+  return miniQuoteMask
+}
+
+function paintQuoteIcon (ctx, x, y, width, color, alpha = 1) {
+  try {
+    const w = Math.max(1, Math.round(width))
+    const h = Math.max(1, Math.round(w * 3 / 4))
+    const key = `${w}:${color}`
+    let icon = tintedMiniQuotes.get(key)
+    if (!icon) {
+      icon = createCanvas(w, h)
+      const iconCtx = icon.getContext('2d')
+      iconCtx.imageSmoothingEnabled = true
+      iconCtx.imageSmoothingQuality = 'high'
+      iconCtx.drawImage(getMiniQuoteMask(), 0, 0, w, h)
+      iconCtx.globalCompositeOperation = 'source-in'
+      iconCtx.fillStyle = color
+      iconCtx.fillRect(0, 0, w, h)
+      tintedMiniQuotes.set(key, icon)
+    }
+    ctx.save()
+    ctx.globalAlpha *= alpha
+    ctx.drawImage(icon, Math.round(x), Math.round(y))
+    ctx.restore()
+    return true
+  } catch (error) {
+    console.warn('Failed to paint Telegram Desktop quote icon:', error.message)
+    return false
+  }
+}
+
 // history_view_location.cpp places the 44px marker horizontally centred,
 // with its bottom tip at the map's centre. The two masks use mapPointDrop
 // and mapPointDot from the Desktop palette.
@@ -176,4 +232,4 @@ function paintMapPoint (ctx, x, y, width, height, scale = 1) {
 // Compatibility name used by code blocks and RichMessage buttons.
 const paintCopyIcon = paintTDesktopIcon
 
-module.exports = { paintCopyIcon, paintTDesktopIcon, paintMapPoint }
+module.exports = { paintCopyIcon, paintTDesktopIcon, paintMapPoint, paintQuoteIcon }

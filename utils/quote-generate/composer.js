@@ -412,6 +412,7 @@ function drawQuote (options) {
     ctx.drawImage(avatar, 0, avatarY, s(SP.avatar), s(SP.avatar))
   }
 
+  canvas._hasReplyMarkup = hasReplyMarkup
   return canvas
 }
 
@@ -428,7 +429,7 @@ function coverSquare (img) {
 }
 
 // The modern-Telegram accent block: rounded backdrop tinted with the accent
-// color, solid accent bar on the left, optional solid ❝ in the top-right
+// color, solid accent bar on the left, optional mini_quote in the top-right
 // corner. Used for the reply preview (accent = replied sender's color) and
 // the partial-quote body (accent = quoted sender's color).
 function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmoji = null, giftEmoji = null, children }) {

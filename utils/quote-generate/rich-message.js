@@ -3,7 +3,7 @@ const sharp = require('sharp')
 const { drawMultilineText } = require('./text-renderer')
 const { renderMath } = require('./math-renderer')
 const { renderCodeBlock } = require('./code-block')
-const { paintCopyIcon, paintMapPoint } = require('./tdesktop-icons')
+const { paintCopyIcon, paintMapPoint, paintQuoteIcon } = require('./tdesktop-icons')
 const { drawDocumentRow, drawAudioRow, paintMediaBadges } = require('./attachments')
 const { hexToRgb, normalizeColor, lightOrDark } = require('./color')
 const loadImageFromUrl = require('../image-load-url')
@@ -484,13 +484,7 @@ async function drawCaption (caption, context) {
 }
 
 function paintQuoteGlyph (ctx, x, y, size, color, closing = false) {
-  ctx.save()
-  ctx.fillStyle = color
-  ctx.font = `bold ${size}px NotoSans`
-  ctx.textAlign = closing ? 'right' : 'left'
-  ctx.textBaseline = 'top'
-  ctx.fillText(closing ? '”' : '“', x, y)
-  ctx.restore()
+  paintQuoteIcon(ctx, closing ? x - size : x, y, size, color)
 }
 
 async function renderQuoteBlock (block, context, depth, containsBlocks = false) {

@@ -1,4 +1,5 @@
 const { createCanvas } = require('canvas')
+const { paintQuoteIcon } = require('./tdesktop-icons')
 
 // Draws the bubble path. When tailSize > 0, the bottom-left corner
 // becomes a tail: flat bottom extending left, rounded top curving up.
@@ -156,37 +157,8 @@ function drawReplyLine (lineWidth, height, color) {
 function drawQuoteIcon (size, color, alpha = 0.15) {
   const canvas = createCanvas(size, size)
   const ctx = canvas.getContext('2d')
-
-  // Draw as a single combined path so nothing overlaps
-  ctx.fillStyle = color
-  ctx.globalAlpha = alpha
-
-  const s = size
-  const r = s * 0.09
-  const gapX = s * 0.36
-
-  // Build one unified path for both quote marks
-  ctx.beginPath()
-  addQuoteMarkPath(ctx, s * 0.08, s * 0.15, r, s)
-  addQuoteMarkPath(ctx, s * 0.08 + gapX, s * 0.15, r, s)
-  ctx.fill()
-
+  paintQuoteIcon(ctx, 0, 0, size, color, alpha)
   return canvas
-}
-
-function addQuoteMarkPath (ctx, x, y, r, s) {
-  // Comma-shaped glyph: circle on top, tail curving down-left
-  const cx = x + r
-  const cy = y + r
-  // Circle
-  ctx.moveTo(cx + r, cy)
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  // Tail
-  ctx.moveTo(x + r * 2, cy)
-  ctx.quadraticCurveTo(x + r * 2.2, y + s * 0.35, x + r * 0.3, y + s * 0.4)
-  ctx.lineTo(x + r * 0.3, y + s * 0.32)
-  ctx.quadraticCurveTo(x + r * 1.5, y + s * 0.27, x + r * 0.8, cy)
-  ctx.closePath()
 }
 
 // Vertical ink bounds of a canvas (rows with any non-transparent pixel),

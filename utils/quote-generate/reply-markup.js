@@ -247,7 +247,7 @@ function buttonFill (color, dark) {
   if (color === 'danger') return 'rgba(201, 84, 62, 0.702)'
   if (color === 'primary') return 'rgba(55, 142, 174, 0.702)'
   if (color === 'success') return 'rgba(72, 157, 56, 0.702)'
-  return dark ? 'rgba(33, 48, 64, 0.835)' : 'rgba(0, 81, 128, 0.349)'
+  return dark ? '#242f3d' : '#f1f1f1'
 }
 
 function roundedRectPath (ctx, x, y, width, height, radii) {

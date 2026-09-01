@@ -259,6 +259,7 @@ module.exports = async (parm) => {
       canvasCtx.drawImage(filteredImages[index], 0, imageY)
       imageY += filteredImages[index].height + (margins[index] || 0)
     }
+    canvas._hasReplyMarkup = filteredImages.some(image => image._hasReplyMarkup)
     canvasQuote = canvas
   } else {
     canvasQuote = filteredImages[0]
@@ -306,17 +307,23 @@ module.exports = async (parm) => {
     const wp = wallpaperColors(background.colorOne)
     await drawPatternBackground(canvasPic, wp.center, wp.edge, patternImage, wp.patternAlpha)
 
-    canvasPicCtx.shadowOffsetX = 8
-    canvasPicCtx.shadowOffsetY = 8
-    canvasPicCtx.shadowBlur = 13
-    canvasPicCtx.shadowColor = 'rgba(0, 0, 0, 0.5)'
-
+    // drawQuote already paints the bubble shadow. With inline markup, an
+    // additional shadow on the transparent composite would create a separate
+    // halo around every button. Keep the legacy outer lift for other renders.
+    const outerShadow = !canvasQuote._hasReplyMarkup
+    if (outerShadow) {
+      canvasPicCtx.shadowOffsetX = 8
+      canvasPicCtx.shadowOffsetY = 8
+      canvasPicCtx.shadowBlur = 13
+      canvasPicCtx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+    }
     canvasPicCtx.drawImage(canvasQuote, widthPadding / 2, heightPadding / 2)
-
-    canvasPicCtx.shadowOffsetX = 0
-    canvasPicCtx.shadowOffsetY = 0
-    canvasPicCtx.shadowBlur = 0
-    canvasPicCtx.shadowColor = 'rgba(0, 0, 0, 0)'
+    if (outerShadow) {
+      canvasPicCtx.shadowOffsetX = 0
+      canvasPicCtx.shadowOffsetY = 0
+      canvasPicCtx.shadowBlur = 0
+      canvasPicCtx.shadowColor = 'rgba(0, 0, 0, 0)'
+    }
 
     canvasPicCtx.fillStyle = 'rgba(0, 0, 0, 0.3)'
     canvasPicCtx.font = `${8 * scale}px Noto Sans`
