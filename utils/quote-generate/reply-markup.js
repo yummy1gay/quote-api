@@ -88,7 +88,7 @@ async function prepareReplyMarkup (markup, options = {}) {
           custom_emoji_id: button.customIcon
         })
       }
-      entities.push({ type: 'medium', offset: 0, length: labelText.length })
+      entities.push({ type: 'semibold', offset: 0, length: labelText.length })
       try {
         button.label = await drawMultilineText(
           labelText || ' ',
@@ -107,7 +107,7 @@ async function prepareReplyMarkup (markup, options = {}) {
         button.customIcon = null
         button.label = await drawMultilineText(
           button.text || ' ',
-          [{ type: 'medium', offset: 0, length: button.text.length }],
+          [{ type: 'semibold', offset: 0, length: button.text.length }],
           fontSize,
           '#ffffff',
           0,
