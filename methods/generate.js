@@ -128,10 +128,14 @@ module.exports = async (parm) => {
     // sender's message immediately above it.
     const prevSame = i > 0 &&
       validMessages[i - 1].chatId === validMessages[i].chatId &&
-      !validMessages[i - 1].replyMarkup
+      !validMessages[i - 1].replyMarkup &&
+      !validMessages[i - 1].service &&
+      !validMessages[i].service
     const nextSame = i < validMessages.length - 1 &&
       validMessages[i + 1].chatId === validMessages[i].chatId &&
-      !validMessages[i].replyMarkup
+      !validMessages[i].replyMarkup &&
+      !validMessages[i].service &&
+      !validMessages[i + 1].service
     validMessages[i].groupPos = prevSame && nextSame ? 'middle' : prevSame ? 'last' : nextSame ? 'first' : 'single'
     if (nextSame) validMessages[i].avatar = false
   }
@@ -245,7 +249,8 @@ module.exports = async (parm) => {
     const margins = []
     let totalMargin = 0
     for (let index = 0; index < pairs.length - 1; index++) {
-      const grouped = pairs[index].message.chatId === pairs[index + 1].message.chatId
+      const grouped = pairs[index].message.chatId === pairs[index + 1].message.chatId &&
+        !pairs[index].message.service && !pairs[index + 1].message.service
       const m = (grouped ? 2 : 6) * scale
       margins.push(m)
       totalMargin += m
@@ -260,6 +265,7 @@ module.exports = async (parm) => {
       imageY += filteredImages[index].height + (margins[index] || 0)
     }
     canvas._hasReplyMarkup = filteredImages.some(image => image._hasReplyMarkup)
+    canvas._disableOuterShadow = filteredImages.some(image => image._disableOuterShadow)
     canvasQuote = canvas
   } else {
     canvasQuote = filteredImages[0]
@@ -310,7 +316,7 @@ module.exports = async (parm) => {
     // drawQuote already paints the bubble shadow. With inline markup, an
     // additional shadow on the transparent composite would create a separate
     // halo around every button. Keep the legacy outer lift for other renders.
-    const outerShadow = !canvasQuote._hasReplyMarkup
+    const outerShadow = !canvasQuote._hasReplyMarkup && !canvasQuote._disableOuterShadow
     if (outerShadow) {
       canvasPicCtx.shadowOffsetX = 8
       canvasPicCtx.shadowOffsetY = 8
