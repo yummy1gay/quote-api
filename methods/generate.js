@@ -251,7 +251,8 @@ module.exports = async (parm) => {
     for (let index = 0; index < pairs.length - 1; index++) {
       const grouped = pairs[index].message.chatId === pairs[index + 1].message.chatId &&
         !pairs[index].message.service && !pairs[index + 1].message.service
-      const m = (grouped ? 2 : 6) * scale
+      const touchesService = pairs[index].message.service || pairs[index + 1].message.service
+      const m = (grouped || touchesService ? 2 : 6) * scale
       margins.push(m)
       totalMargin += m
     }
