@@ -447,7 +447,9 @@ function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmo
       ctx.drawImage(solid, n.x, n.y)
       ctx.restore()
       paintAccentBar(ctx, n, colors, s(b.bar), s(2))
-      if (backgroundEmoji || giftEmoji) paintBackgroundEmoji(ctx, n, backgroundEmoji, giftEmoji, primary, s)
+      if (backgroundEmoji || giftEmoji) {
+        paintBackgroundEmoji(ctx, n, backgroundEmoji, giftEmoji, primary, icon, s)
+      }
       if (icon) ctx.drawImage(drawQuoteIcon(s(b.icon), primary, 1), n.x + n.w - s(b.icon) - s(b.iconInset), n.y + s(b.iconInset))
     },
     children
@@ -492,7 +494,7 @@ function paintAccentBar (ctx, n, colors, width, shift) {
   ctx.restore()
 }
 
-function paintBackgroundEmoji (ctx, n, image, giftImage, color, s) {
+function paintBackgroundEmoji (ctx, n, image, giftImage, color, quote, s) {
   // right offset, y, size, opacity — copied from FillBackgroundEmoji.
   const placements = [
     [28, 4, 20, 0.32], [51, 15, 16, 0.32], [64, -2, 12, 0.28],
@@ -508,7 +510,7 @@ function paintBackgroundEmoji (ctx, n, image, giftImage, color, s) {
     const isGift = i === 0 && giftImage
     if (!isGift && !image) continue
     const size = s(rawSize)
-    const x = n.x + n.w - s(right)
+    const x = n.x + n.w - s(right + (quote ? 12 : 0))
     const y = n.y + s(py)
     ctx.save()
     ctx.globalAlpha = isGift ? 1 : opacity
