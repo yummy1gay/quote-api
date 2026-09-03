@@ -14,6 +14,7 @@ const { downloadMediaImage } = require('./media')
 const { drawQuote } = require('./composer')
 const { renderRichMessage } = require('./rich-message')
 const { prepareReplyMarkup } = require('./reply-markup')
+const { resolveReplyContent } = require('./reply')
 const { renderServiceMessage } = require('./service-message')
 const { drawLabel } = require('./canvas-utils')
 const { loadIcons, loadCustomEmojiImage, drawVoiceRow, drawDocumentRow, drawAudioRow, drawReplyIcon, formatDuration } = require('./attachments')
@@ -248,13 +249,15 @@ class QuoteGenerate {
     }
 
     let replyData = null
-    if (message.replyMessage && message.replyMessage.name && message.replyMessage.text) {
+    const replyMessage = message.replyMessage
+    const replyContent = replyMessage ? resolveReplyContent(replyMessage) : null
+    if (replyMessage && replyMessage.name && replyContent.text) {
       try {
-        const chatId = message.replyMessage.chatId || 0
+        const chatId = replyMessage.chatId || 0
         const replyNameIndex = Math.abs(chatId) % 7
         const fallbackReplyColor = nameColorArray[replyNameIndex]
-        const replyPeerColor = message.replyMessage.peerColor || message.replyMessage.color ||
-          (message.replyMessage.from && (message.replyMessage.from.peerColor || message.replyMessage.from.color))
+        const replyPeerColor = replyMessage.peerColor || replyMessage.color ||
+          (replyMessage.from && (replyMessage.from.peerColor || replyMessage.from.color))
         const resolvedReplyColor = resolvePeerColor(
           replyPeerColor,
           backStyle === 'dark',
@@ -262,16 +265,15 @@ class QuoteGenerate {
         )
         const replyNameColor = resolvedReplyColor.main
 
-        const replyName = typeof message.replyMessage.name === 'string' ? message.replyMessage.name : String(message.replyMessage.name)
-        const replyText = typeof message.replyMessage.text === 'string' ? message.replyMessage.text : String(message.replyMessage.text)
+        const replyName = typeof replyMessage.name === 'string' ? replyMessage.name : String(replyMessage.name)
+        const replyText = replyContent.text
+        const manualQuote = replyContent.manualQuote
 
         const normalizedReplyName = replyName.replace(/[\r\n]/g, ' ')
-        const normalizedReplyText = replyText.replace(/[\r\n]/g, ' ')
-        const replyIconName = String(message.replyMessage.icon || '')
-        const replyEntities = Array.isArray(message.replyMessage.entities)
-          ? message.replyMessage.entities.slice()
-          : []
-        if (message.replyMessage.service && !replyEntities.some(entity =>
+        const normalizedReplyText = manualQuote ? replyText : replyText.replace(/[\r\n]/g, ' ')
+        const replyIconName = manualQuote ? '' : String(replyMessage.icon || '')
+        const replyEntities = replyContent.entities
+        if (!manualQuote && replyMessage.service && !replyEntities.some(entity =>
           entity.type === 'media_type' && Number(entity.offset || 0) === 0 &&
           Number(entity.length || 0) >= normalizedReplyText.length)) {
           replyEntities.unshift({ type: 'media_type', offset: 0, length: normalizedReplyText.length })
@@ -289,7 +291,8 @@ class QuoteGenerate {
           replyTextFontSize, textColor,
           0, replyTextFontSize,
           Math.max(replyTextFontSize * 4, width * 0.9 - (replyIconName ? 21 * scale : 0)),
-          replyTextFontSize, emojiBrand, this.telegram, null,
+          manualQuote ? replyTextFontSize * 6 : replyTextFontSize,
+          emojiBrand, this.telegram, null,
           { accentColor: replyNameColor }
         )
 
@@ -299,7 +302,9 @@ class QuoteGenerate {
             nameColor: replyNameColor,
             colors: resolvedReplyColor.outlineColors,
             collectible: resolvedReplyColor.collectible,
-            text: replyTextCanvas
+            text: replyTextCanvas,
+            quote: manualQuote,
+            quoteOffset: replyContent.quoteOffset
           }
 
           if (replyIconName) {
@@ -321,8 +326,8 @@ class QuoteGenerate {
 
           // Thumbnail of the replied media (photo/video/sticker…), like the
           // modern Telegram reply preview. Best-effort — silently skipped.
-          const replyMedia = message.replyMessage.media
-          if (!message.replyMessage.service && replyMedia && (replyMedia.fileId || replyMedia.url)) {
+          const replyMedia = replyMessage.media
+          if (!replyMessage.service && replyMedia && (replyMedia.fileId || replyMedia.url)) {
             try {
               const fileUrl = replyMedia.url || await this.telegram.getFileLink(replyMedia.fileId)
               const buffer = await loadImageFromUrl(fileUrl)

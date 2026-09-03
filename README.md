@@ -98,6 +98,11 @@ Content-Type: `application/json`
 |                      |                |          | - `name`: Name of the user being replied to                                                              |
 |                      |                |          | - `text`: Text of the replied message                                                                    |
 |                      |                |          | - `entities`: Text styles in the reply                                                                   |
+|                      |                |          | - `quoteText`: Manually selected quote text from `MessageReplyHeader.quote_text`                         |
+|                      |                |          | - `quoteEntities`: Styles relative to `quoteText`                                                        |
+|                      |                |          | - `quoteOffset`: UTF-16 offset of the selection in the original text (navigation metadata)               |
+|                      |                |          | - `manualQuote`: Whether to render the selected text as a multiline quote; inferred from `quoteText`     |
+|                      |                |          | - Raw aliases `quote_text`, `quote_entities`, `quote_offset`, and `quote` are also accepted              |
 |                      |                |          | - `chatId`: ID of the chat where the original message was sent (defaults to sender ID if missing)         |
 |                      |                |          | - `from`: Optional user information about the reply author                                               |
 | `media`              | object\|array  | No       | If array is passed, uses the last file (or second if `mediaCrop=true`).                                 |

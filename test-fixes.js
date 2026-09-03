@@ -91,9 +91,38 @@ async function main () {
     console.log(`  image/${label}: bubble ${bubble.toFixed(0)} vs wallpaper ${wall.toFixed(0)} (Δ${Math.abs(bubble - wall).toFixed(0)})`)
   }
 
+  // 4. MessageReplyHeader manual quotes replace the generic reply preview,
+  //    keep their own entities, and use Desktop's multiline quote layout.
+  const replyBase = {
+    chatId: 9,
+    avatar: false,
+    from: { id: 9, name: 'Sender' },
+    text: 'response',
+    replyMessage: {
+      name: 'Original author',
+      text: 'generic preview',
+      entities: [],
+      chatId: 10
+    }
+  }
+  const regularReply = await qg.generate('#1b1429', '#1b1429', replyBase, 512, 512, scale, 'apple')
+  const manualReply = await qg.generate('#1b1429', '#1b1429', {
+    ...replyBase,
+    replyMessage: {
+      ...replyBase.replyMessage,
+      quote: true,
+      quote_text: 'first selected line\nsecond selected line\nthird selected line',
+      quote_entities: [{ type: 'bold', offset: 0, length: 5 }],
+      quote_offset: 429
+    }
+  }, 512, 512, scale, 'apple')
+  assert.ok(manualReply.height > regularReply.height,
+    `manual quote height ${manualReply.height} must exceed regular reply height ${regularReply.height}`)
+
   console.log('OK: fixes assertions passed')
   console.log(`  avatar ink ratio grouped/ungrouped = ${ratio.toFixed(3)} (≈0.5)`)
   console.log(`  voice bubble width = ${voice.width} (expected ${expectedW}, row ${row.width})`)
+  console.log(`  manual reply quote height = ${manualReply.height} (regular ${regularReply.height})`)
 }
 
 main().catch((err) => {

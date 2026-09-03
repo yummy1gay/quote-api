@@ -161,6 +161,7 @@ function drawQuote (options) {
       })
       : replyTexts
     replyNode = accentBlock(s, reply.colors || reply.nameColor, {
+      icon: reply.quote,
       fillColor: reply.nameColor,
       backgroundEmoji: reply.backgroundEmoji,
       giftEmoji: reply.giftEmoji,

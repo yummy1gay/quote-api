@@ -3,6 +3,7 @@ const { QuoteGenerate } = require('../utils')
 const { createCanvas, loadImage } = require('canvas')
 const sharp = require('sharp')
 const { parseBackgroundColor, colorLuminance, lightOrDark, hexToHsl, hslToHex } = require('../utils/quote-generate/color')
+const { normalizeReplyMessage } = require('../utils/quote-generate/reply')
 const { brands: emojiBrands } = require('../utils/emoji-image')
 
 const ALLOWED_EMOJI_BRANDS = new Set(Object.keys(emojiBrands))
@@ -36,19 +37,17 @@ function normalizeMessage (message) {
       .join(' ')
   }
   if (message.replyMessage) {
-    if (!message.replyMessage.chatId) {
-      message.replyMessage.chatId = message.from.id || 0
+    const reply = normalizeReplyMessage(message.replyMessage)
+    if (!reply.chatId) {
+      reply.chatId = message.from.id || 0
     }
-    if (!message.replyMessage.entities) {
-      message.replyMessage.entities = []
-    }
-    if (!message.replyMessage.from) {
-      message.replyMessage.from = {
-        name: message.replyMessage.name,
+    if (!reply.from) {
+      reply.from = {
+        name: reply.name,
         photo: {}
       }
-    } else if (!message.replyMessage.from.photo) {
-      message.replyMessage.from.photo = {}
+    } else if (!reply.from.photo) {
+      reply.from.photo = {}
     }
   }
 }
