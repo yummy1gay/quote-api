@@ -79,35 +79,30 @@ async function renderServiceMessage (service, options = {}) {
     ? 'rgba(37, 49, 61, 0.82)'
     : 'rgba(66, 101, 123, 0.68)'
   const textTop = marginTop + padTop
+
+  const seams = []
+  for (let i = 0; i < layout.lines.length - 1; i++) {
+    seams.push(Math.round(textTop + layout.lines[i].y + prepared.lineHeight / 2))
+  }
+
   const rects = layout.lines.map((line, index) => {
     const lineWidth = Math.max(1, Math.ceil(line.contentWidth || line.width))
-    const lineTop = line.y - prepared.ascent
-    const last = index === layout.lines.length - 1
+    const topY = index === 0 ? marginTop : seams[index - 1]
+    const bottomY = index === layout.lines.length - 1 ? (marginTop + bodyHeight) : seams[index]
     return {
       x: (targetWidth - lineWidth - padX * 2) / 2,
-      y: textTop + lineTop - (index === 0 ? padTop : 0),
+      y: topY,
       w: lineWidth + padX * 2,
-      h: (last ? prepared.ascent + prepared.descent : prepared.lineHeight) +
-        (index === 0 ? padTop : 0) + (last ? padBottom : 0)
+      h: bottomY - topY
     }
   })
 
+  const minDelta = 40 * UI * scale
+  equalizeServiceMessageRects(rects, targetWidth, minDelta)
+
   ctx.fillStyle = background
-  for (const rect of rects) {
-    roundedRect(ctx, rect.x, rect.y, rect.w, rect.h, radius)
-    ctx.fill()
-  }
-  // Adjacent rounded rows are joined through their shared center. This is
-  // the same contour principle as PaintComplexBubble: wide/narrow lines form
-  // one continuous pill instead of a stack of detached capsules.
-  for (let i = 0; i + 1 < rects.length; i++) {
-    const current = rects[i]
-    const next = rects[i + 1]
-    const left = Math.max(current.x, next.x)
-    const right = Math.min(current.x + current.w, next.x + next.w)
-    const seam = next.y
-    if (right > left) ctx.fillRect(left, seam - radius, right - left, radius * 2)
-  }
+  drawComplexBubblePath(ctx, rects, radius)
+  ctx.fill()
 
   for (const line of layout.lines) {
     const lineWidth = Math.max(1, Math.ceil(line.contentWidth || line.width))
@@ -144,6 +139,167 @@ async function renderServiceMessage (service, options = {}) {
   canvas._disableOuterShadow = true
   canvas._hasReplyMarkup = !!keyboard
   return canvas
+}
+
+function drawComplexBubblePath (ctx, rects, outerRadius) {
+  if (!rects || rects.length === 0) return
+  if (rects.length === 1) {
+    roundedRect(ctx, rects[0].x, rects[0].y, rects[0].w, rects[0].h, outerRadius)
+    return
+  }
+
+  ctx.beginPath()
+
+  const first = rects[0]
+  const r0 = Math.min(outerRadius, first.w / 2, first.h / 2)
+  ctx.moveTo(first.x + first.w / 2, first.y)
+
+  ctx.lineTo(first.x + first.w - r0, first.y)
+  ctx.arcTo(
+    first.x + first.w, first.y,
+    first.x + first.w, first.y + r0,
+    r0
+  )
+
+  for (let i = 0; i < rects.length - 1; i++) {
+    const curr = rects[i]
+    const next = rects[i + 1]
+
+    const currMaxX = curr.x + curr.w
+    const nextMaxX = next.x + next.w
+    const seamY = curr.y + curr.h
+
+    const diff = currMaxX - nextMaxX
+    if (Math.abs(diff) < 1) {
+      ctx.lineTo(nextMaxX, next.y + next.h / 2)
+    } else {
+      const stepRadius = Math.min(
+        outerRadius,
+        curr.h / 2,
+        next.h / 2,
+        Math.abs(diff) / 2
+      )
+
+      ctx.lineTo(currMaxX, seamY - stepRadius)
+
+      if (diff > 0) {
+        ctx.arcTo(currMaxX, seamY, currMaxX - stepRadius, seamY, stepRadius)
+        ctx.lineTo(nextMaxX + stepRadius, seamY)
+        ctx.arcTo(nextMaxX, seamY, nextMaxX, seamY + stepRadius, stepRadius)
+      } else {
+        ctx.arcTo(currMaxX, seamY, currMaxX + stepRadius, seamY, stepRadius)
+        ctx.lineTo(nextMaxX - stepRadius, seamY)
+        ctx.arcTo(nextMaxX, seamY, nextMaxX, seamY + stepRadius, stepRadius)
+      }
+
+      ctx.lineTo(nextMaxX, next.y + next.h / 2)
+    }
+  }
+
+  const last = rects[rects.length - 1]
+  const rLast = Math.min(outerRadius, last.w / 2, last.h / 2)
+  const lastMaxX = last.x + last.w
+
+  ctx.lineTo(lastMaxX, last.y + last.h - rLast)
+  ctx.arcTo(
+    lastMaxX, last.y + last.h,
+    lastMaxX - rLast, last.y + last.h,
+    rLast
+  )
+  ctx.lineTo(last.x + rLast, last.y + last.h)
+  ctx.arcTo(
+    last.x, last.y + last.h,
+    last.x, last.y + last.h - rLast,
+    rLast
+  )
+
+  for (let i = rects.length - 1; i > 0; i--) {
+    const curr = rects[i]
+    const prev = rects[i - 1]
+
+    const currMinX = curr.x
+    const prevMinX = prev.x
+    const seamY = curr.y
+
+    const diff = currMinX - prevMinX
+    if (Math.abs(diff) < 1) {
+      ctx.lineTo(prevMinX, prev.y + prev.h / 2)
+    } else {
+      const stepRadius = Math.min(
+        outerRadius,
+        curr.h / 2,
+        prev.h / 2,
+        Math.abs(diff) / 2
+      )
+
+      ctx.lineTo(currMinX, seamY + stepRadius)
+
+      if (diff > 0) {
+        ctx.arcTo(currMinX, seamY, currMinX - stepRadius, seamY, stepRadius)
+        ctx.lineTo(prevMinX + stepRadius, seamY)
+        ctx.arcTo(prevMinX, seamY, prevMinX, seamY - stepRadius, stepRadius)
+      } else {
+        ctx.arcTo(currMinX, seamY, currMinX + stepRadius, seamY, stepRadius)
+        ctx.lineTo(prevMinX - stepRadius, seamY)
+        ctx.arcTo(prevMinX, seamY, prevMinX, seamY - stepRadius, stepRadius)
+      }
+
+      ctx.lineTo(prevMinX, prev.y + prev.h / 2)
+    }
+  }
+
+  ctx.lineTo(first.x, first.y + r0)
+  ctx.arcTo(
+    first.x, first.y,
+    first.x + r0, first.y,
+    r0
+  )
+  ctx.closePath()
+}
+
+function equalizeServiceMessageRects (rects, targetWidth, minDelta) {
+  if (!rects || rects.length <= 1) return
+
+  for (let pass = 0; pass < rects.length; pass++) {
+    let changed = false
+    for (let i = 1; i < rects.length - 1; i++) {
+      const minNeighbor = Math.min(rects[i - 1].w, rects[i + 1].w)
+      if (rects[i].w < minNeighbor) {
+        rects[i].w = minNeighbor
+        rects[i].x = (targetWidth - minNeighbor) / 2
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+
+  const sorted = rects.map((_, i) => i).sort((a, b) => rects[b].w - rects[a].w)
+  for (const idx of sorted) {
+    for (const d of [-1, 1]) {
+      const neighbor = idx + d
+      if (neighbor >= 0 && neighbor < rects.length) {
+        if (rects[idx].w - rects[neighbor].w > 0 && rects[idx].w - rects[neighbor].w < minDelta) {
+          rects[neighbor].w = rects[idx].w
+          rects[neighbor].x = (targetWidth - rects[idx].w) / 2
+        }
+      }
+    }
+  }
+
+  for (let pass = 0; pass < rects.length; pass++) {
+    let changed = false
+    for (let i = 0; i < rects.length - 1; i++) {
+      if (Math.abs(rects[i].w - rects[i + 1].w) > 0 && Math.abs(rects[i].w - rects[i + 1].w) < minDelta) {
+        const maxW = Math.max(rects[i].w, rects[i + 1].w)
+        rects[i].w = maxW
+        rects[i].x = (targetWidth - maxW) / 2
+        rects[i + 1].w = maxW
+        rects[i + 1].x = (targetWidth - maxW) / 2
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
 }
 
 function roundedRect (ctx, x, y, width, height, radius) {
