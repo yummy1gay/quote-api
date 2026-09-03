@@ -501,6 +501,9 @@ function paintBackgroundEmoji (ctx, n, image, giftImage, color, quote, s) {
     [87, 11, 16, 0.24], [125, -2, 20, 0.16], [28, 31, 16, 0.24],
     [72, 33, 20, 0.2], [46, 52, 16, 0.24], [24, 55, 20, 0.18]
   ]
+  if (quote) {
+    placements.push([4, 23, 16, 0.28], [0, 48, 12, 0.24])
+  }
   ctx.save()
   ctx.beginPath()
   roundedRectPath(ctx, n.x, n.y, n.w, n.h, s(SP.block.radius))
