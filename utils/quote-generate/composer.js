@@ -26,7 +26,7 @@ const SP = {
   maxHeader: 300, // header/forward-label width cap — longer names fade out instead of inflating the bubble
   radius: 25, // bubble corner radius
   radiusGrouped: 7, // corner radius facing a same-sender neighbour bubble
-  replyThumb: 32, // Telegram Desktop historyReplyPreview
+  replyThumb: 36, // Telegram Desktop historyReplyPreview
   shadowPad: 12, // canvas margin (right/bottom) so the drop shadow isn't clipped
   shadowPadTop: 4, // canvas margin above the bubble (shadow blur spills up a little)
   glass: 1.25, // frosted-glass hairline width (border + top edge highlight)
@@ -185,6 +185,7 @@ function drawQuote (options) {
       fillColor: reply.nameColor,
       backgroundEmoji: reply.backgroundEmoji,
       giftEmoji: reply.giftEmoji,
+      minW: s(reply.thumb ? 170 : 120),
       children: [inner]
     })
     // Reply headers occupy the message's full content width, regardless of
@@ -447,11 +448,12 @@ function coverSquare (img) {
 // color, solid accent bar on the left, optional mini_quote in the top-right
 // corner. Used for the reply preview (accent = replied sender's color) and
 // the partial-quote body (accent = quoted sender's color).
-function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmoji = null, giftEmoji = null, children }) {
+function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmoji = null, giftEmoji = null, minW = 0, children }) {
   const b = SP.block
   const colors = (Array.isArray(accent) ? accent : [accent]).filter(Boolean)
   const primary = fillColor || colors[0] || '#fff'
   return box({
+    minW,
     gap: s(b.gap),
     pad: { t: s(b.padY), r: s(icon ? b.padRIcon : b.padR), b: s(b.padY), l: s(b.padL) },
     bg: (ctx, n) => {
