@@ -223,7 +223,7 @@ async function drawText (node, size, color, maxWidth, maxHeight, emojiBrand, tel
         size,
         color,
         accent: accent || color,
-        scale: scale || Math.max(1, size / 21),
+        scale: scale || Math.max(1, size / 16),
         maxWidth,
         maxHeight,
         emojiBrand,
@@ -1207,18 +1207,18 @@ async function renderBlock (block, context, depth = 0) {
       context.scale
     )
   const textSizes = {
-    title: 34,
-    subtitle: 26,
-    header: 29,
-    subheader: 25,
-    heading1: 34,
-    heading2: 31,
-    heading3: 28,
-    heading4: 26,
-    heading5: 24,
-    heading6: 22,
-    kicker: 16,
-    footer: 16
+    title: 26,
+    subtitle: 22,
+    header: 22,
+    subheader: 20,
+    heading1: 23,
+    heading2: 22,
+    heading3: 21,
+    heading4: 20,
+    heading5: 18,
+    heading6: 17,
+    kicker: 14,
+    footer: 14
   }
   if (textSizes[type]) {
     return text(block.text, textSizes[type] * s, context.color, context.width, type === 'kicker' ? 'bold' : null)
@@ -1240,7 +1240,7 @@ async function renderBlock (block, context, depth = 0) {
       text: richText(block.text).text,
       language: block.language || '',
       width: context.width,
-      fontSize: context.small,
+      fontSize: context.font,
       scale: context.scale,
       color: context.color,
       muted: context.muted,
@@ -1403,8 +1403,8 @@ async function renderRichMessage (rich, options) {
   if (!rich || !Array.isArray(rich.blocks)) return null
   const context = {
     scale: options.scale,
-    font: 21 * options.scale,
-    small: 16 * options.scale,
+    font: 16 * options.scale,
+    small: 14 * options.scale,
     tableFont: 16 * options.scale,
     color: options.color,
     muted: options.muted,
