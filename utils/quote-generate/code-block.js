@@ -111,6 +111,67 @@ function splitRunsIntoLines (runs) {
   return lines
 }
 
+function wrapLineRuns (runs, maxWidth, measureFn) {
+  const wrappedLines = []
+  let currentLine = []
+  let currentWidth = 0
+
+  for (const run of runs) {
+    const text = run.text.replace(/\t/g, '    ')
+    if (!text) continue
+
+    let remaining = text
+    while (remaining.length > 0) {
+      const remWidth = measureFn(remaining)
+      if (currentWidth + remWidth <= maxWidth) {
+        currentLine.push({ ...run, text: remaining })
+        currentWidth += remWidth
+        break
+      }
+
+      let fitLen = 0
+      let lastSpaceIdx = -1
+      for (let i = 1; i <= remaining.length; i++) {
+        const sub = remaining.slice(0, i)
+        if (measureFn(sub) > (maxWidth - currentWidth)) {
+          break
+        }
+        fitLen = i
+        if (remaining[i - 1] === ' ') {
+          lastSpaceIdx = i
+        }
+      }
+
+      if (fitLen === 0 && currentLine.length > 0) {
+        wrappedLines.push(currentLine)
+        currentLine = []
+        currentWidth = 0
+        continue
+      }
+
+      if (fitLen === 0) {
+        fitLen = 1
+      } else if (lastSpaceIdx > 0 && lastSpaceIdx < remaining.length && fitLen < remaining.length) {
+        fitLen = lastSpaceIdx
+      }
+
+      const chunk = remaining.slice(0, fitLen)
+      currentLine.push({ ...run, text: chunk })
+      currentWidth += measureFn(chunk)
+      wrappedLines.push(currentLine)
+      currentLine = []
+      currentWidth = 0
+      remaining = remaining.slice(fitLen)
+    }
+  }
+
+  if (currentLine.length > 0) {
+    wrappedLines.push(currentLine)
+  }
+
+  return wrappedLines.length > 0 ? wrappedLines : [[]]
+}
+
 function roundedRect (ctx, x, y, width, height, radius) {
   const r = Math.max(0, Math.min(radius, width / 2, height / 2))
   ctx.moveTo(x + r, y)
@@ -126,14 +187,27 @@ function renderCodeBlock (options) {
   const language = String(options.language || '').trim()
   const scale = options.scale || 1
   const width = Math.max(1, Math.ceil(options.width || 1))
-  const fontSize = options.fontSize || 16 * scale
+  const fontSize = options.fontSize || Math.round(17 * scale)
   const lineHeight = Math.ceil(fontSize * 1.36)
   const headerHeight = 20 * scale
   const padLeft = 10 * scale
   const padRight = 4 * scale
   const padTop = 2 * scale
   const padBottom = 4 * scale
-  const lines = splitRunsIntoLines(highlightedRuns(code, language))
+
+  const measureCanvas = createCanvas(1, 1)
+  const measureCtx = measureCanvas.getContext('2d')
+  measureCtx.font = `${fontSize}px NotoSansMono, monospace`
+  const measureFn = (str) => measureCtx.measureText(str).width
+  const maxContentWidth = Math.max(1, width - padLeft - padRight)
+
+  const rawLines = splitRunsIntoLines(highlightedRuns(code, language))
+  const lines = []
+  for (const rawLine of rawLines) {
+    const wrapped = wrapLineRuns(rawLine, maxContentWidth, measureFn)
+    for (const w of wrapped) lines.push(w)
+  }
+
   const height = Math.max(1, Math.ceil(padTop + headerHeight + lines.length * lineHeight + padBottom))
   const out = createCanvas(width, height)
   const ctx = out.getContext('2d')

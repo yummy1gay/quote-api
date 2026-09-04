@@ -216,7 +216,7 @@ class QuoteGenerate {
                 text: part.text,
                 language: part.language,
                 width,
-                fontSize,
+                fontSize: Math.round(17 * effectiveScale),
                 scale: effectiveScale,
                 color: textColor,
                 muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
