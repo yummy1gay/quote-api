@@ -200,15 +200,15 @@ class QuoteGenerate {
           for (const part of parts) {
             const canvas = part.pre
               ? renderCodeBlock({
-                  text: part.text,
-                  language: part.language,
-                  width,
-                  fontSize: 16 * scale,
-                  scale,
-                  color: textColor,
-                  muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
-                  dark: backStyle === 'dark'
-                })
+                text: part.text,
+                language: part.language,
+                width,
+                fontSize: 16 * scale,
+                scale,
+                color: textColor,
+                muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
+                dark: backStyle === 'dark'
+              })
               : await drawMultilineText(
                 part.text, part.entities, fontSize, textColor,
                 0, fontSize, width, height - fontSize, emojiBrand, this.telegram
@@ -570,8 +570,24 @@ function splitStructuralBlocks (text, entities) {
   for (const block of blocks) {
     if (block.offset < pos) continue // overlapping blocks — keep the first
     if (block.offset > pos) {
-      const plain = text.slice(pos, block.offset).replace(/\n+$/, '')
-      if (plain) parts.push({ text: plain, entities: sliceEntities(pos, block.offset), quote: false, pre: false })
+      let rawPlain = text.slice(pos, block.offset)
+      let startOffset = pos
+      if (pos > 0) {
+        const leading = (rawPlain.match(/^\n+/) || [''])[0].length
+        rawPlain = rawPlain.slice(leading)
+        startOffset += leading
+      }
+      const trailing = (rawPlain.match(/\n+$/) || [''])[0].length
+      const endOffset = startOffset + rawPlain.length - trailing
+      const plain = rawPlain.slice(0, rawPlain.length - trailing)
+      if (plain) {
+        parts.push({
+          text: plain,
+          entities: sliceEntities(startOffset, endOffset),
+          quote: false,
+          pre: false
+        })
+      }
     }
     parts.push({
       text: text.slice(block.offset, block.offset + block.length),
@@ -585,8 +601,18 @@ function splitStructuralBlocks (text, entities) {
   if (pos < text.length) {
     const leadingBreaks = (text.slice(pos).match(/^\n+/) || [''])[0].length
     const tailStart = pos + leadingBreaks
-    const tail = text.slice(tailStart)
-    if (tail) parts.push({ text: tail, entities: sliceEntities(tailStart, text.length), quote: false, pre: false })
+    const rawTail = text.slice(tailStart)
+    const trailingBreaks = (rawTail.match(/\n+$/) || [''])[0].length
+    const tailEnd = tailStart + rawTail.length - trailingBreaks
+    const tail = rawTail.slice(0, rawTail.length - trailingBreaks)
+    if (tail) {
+      parts.push({
+        text: tail,
+        entities: sliceEntities(tailStart, tailEnd),
+        quote: false,
+        pre: false
+      })
+    }
   }
   return parts.length > 0 ? parts : null
 }

@@ -101,9 +101,22 @@ function drawQuote (options) {
   const mediaType = media ? media.type : null
   const mediaCanvas = media ? media.canvas : null
   const isSticker = mediaType === 'sticker'
+  const isRound = mediaType === 'video_note' // round video — circular mask
   const hasVenue = Boolean(venue && (venue.title || venue.address))
   const hasReplyMarkup = Boolean(replyMarkup && replyMarkup.rows && replyMarkup.rows.length)
   const nameCanvas = isSticker ? null : name
+
+  let mediaWidth = 0
+  let mediaHeight = 0
+  if (mediaCanvas) {
+    const maxMediaSize = media.maxSize
+    mediaWidth = mediaCanvas.width * (maxMediaSize / mediaCanvas.height)
+    mediaHeight = maxMediaSize
+    if (mediaWidth >= maxMediaSize) {
+      mediaWidth = maxMediaSize
+      mediaHeight = mediaCanvas.height * (maxMediaSize / mediaCanvas.width)
+    }
+  }
 
   // ---- Leaves -------------------------------------------------------------
 
@@ -117,6 +130,9 @@ function drawQuote (options) {
     // first, "via @bot" and the tag always stay visible.
     const viaLeaf = viaBot ? leaf(viaBot) : null
     let nameMax = s(SP.maxHeader)
+    if (mediaCanvas && !isRound) {
+      nameMax = Math.min(nameMax, mediaWidth - s(SP.padX * 2))
+    }
     if (viaLeaf) nameMax -= viaLeaf.w + s(6)
     if (tagLeaf) nameMax -= tagLeaf.w + s(SP.headerGap)
     const nameLeaf = nameCanvas ? leaf(nameCanvas, { maxW: Math.max(s(40), nameMax) }) : null
@@ -130,7 +146,11 @@ function drawQuote (options) {
 
   let forwardNode = null
   if (isForward && forwardLabel) {
-    forwardNode = leaf(drawForwardLabel(forwardLabel, s(13), accent), { maxW: s(SP.maxHeader) })
+    let fwdMax = s(SP.maxHeader)
+    if (mediaCanvas && !isRound) {
+      fwdMax = Math.min(fwdMax, mediaWidth - s(SP.padX * 2))
+    }
+    forwardNode = leaf(drawForwardLabel(forwardLabel, s(13), accent), { maxW: Math.max(s(40), fwdMax) })
   }
 
   let replyNode = null
@@ -199,7 +219,6 @@ function drawQuote (options) {
   // Like Telegram, media hugs the bubble edge it borders: with no caption
   // below (or no header above) the bubble padding on that side collapses and
   // the media corners inherit the bubble's own radii.
-  const isRound = mediaType === 'video_note' // round video — circular mask
   const hasCaption = Boolean(text) || (Array.isArray(textBlocks) && textBlocks.length > 0) || Boolean(attachment) || Boolean(richContent) || hasVenue
   const flushable = !!mediaCanvas && !mediaOnly && !isSticker && !isRound
   const flushBottom = flushable && !hasCaption
@@ -207,27 +226,20 @@ function drawQuote (options) {
 
   let mediaNode = null
   if (mediaCanvas) {
-    const maxMediaSize = media.maxSize
-    let mediaWidth = mediaCanvas.width * (maxMediaSize / mediaCanvas.height)
-    let mediaHeight = maxMediaSize
-    if (mediaWidth >= maxMediaSize) {
-      mediaWidth = maxMediaSize
-      mediaHeight = mediaCanvas.height * (maxMediaSize / mediaCanvas.width)
-    }
-    const mr = s(SP.mediaRound)
     const mediaRadius = mediaOnly || isSticker
       ? (mediaOnly && hasReplyMarkup
-          ? { tl: s(SP.radius * 0.6), tr: s(SP.radius * 0.6), br: s(8), bl: s(8) }
-          : s(SP.radius * 0.6))
+        ? { tl: s(SP.radius * 0.6), tr: s(SP.radius * 0.6), br: s(8), bl: s(8) }
+        : s(SP.radius * 0.6))
       : {
-        tl: flushTop ? radii.tl : mr,
-        tr: flushTop ? radii.tr : mr,
-        br: hasVenue ? 0 : (flushBottom ? radii.br : mr),
-        bl: hasVenue ? 0 : (flushBottom ? radii.bl : mr)
+        tl: flushTop ? radii.tl : 0,
+        tr: flushTop ? radii.tr : 0,
+        br: hasVenue ? 0 : (flushBottom ? radii.br : 0),
+        bl: hasVenue ? 0 : (flushBottom ? radii.bl : 0)
       }
     mediaNode = leaf(mediaCanvas, {
       trim: false,
       bleed: !isRound,
+      mt: flushTop ? 0 : (headerNode || forwardNode || replyNode ? s(3) : s(SP.gap)),
       w: isRound ? Math.min(mediaWidth, mediaHeight) : mediaWidth,
       h: isRound ? Math.min(mediaWidth, mediaHeight) : mediaHeight,
       paint: (ctx, n) => {
@@ -286,7 +298,7 @@ function drawQuote (options) {
     const parts = textBlocks.map((b) => {
       if (b.quote) return accentBlock(s, accent, { icon: true, children: [leaf(b.canvas)] })
       const l = leaf(b.canvas)
-      if (l) l.mt = s(2) // plain runs carry their own metric air
+      if (l) l.mt = b.pre ? s(4) : s(2) // plain runs carry metric air; pre is a solid block
       return l
     })
     textNode = box({ dir: 'col', gap: s(5), children: parts })
@@ -300,8 +312,8 @@ function drawQuote (options) {
   if (textNode && !isQuote) {
     // A document's message text is its caption. Desktop places it after the
     // file row's bottom padding; the generic zero-gap text rule made captions
-    // stick directly to the enlarged icon.
-    textNode.mt = isDocumentAttachment ? s(12) : 0
+    // stick directly to the enlarged icon. Media captions also need top air.
+    textNode.mt = mediaCanvas ? s(SP.padY) : (isDocumentAttachment ? s(12) : 0)
   }
 
   // ---- Tree ---------------------------------------------------------------
@@ -312,8 +324,10 @@ function drawQuote (options) {
     b: flushBottom ? 0 : s(SP.padY),
     l: s(SP.padX)
   }
-  // Desktop suppresses the bubble tail when inline buttons are attached.
-  const tailSize = avatar && !hasReplyMarkup ? s(SP.tail) : 0
+  // Desktop suppresses the bubble tail when inline buttons are attached,
+  // or when media sits at the bottom of the bubble with no caption below it.
+  const skipTail = hasReplyMarkup || flushBottom || (mediaOnly && !hasCaption)
+  const tailSize = avatar && !skipTail ? s(SP.tail) : 0
 
   const bubbleBg = (ctx, n) => {
     const one = background.colorOne

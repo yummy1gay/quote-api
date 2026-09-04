@@ -122,7 +122,7 @@ function roundedRect (ctx, x, y, width, height, radius) {
 }
 
 function renderCodeBlock (options) {
-  const code = String(options.text || '').replace(/\r\n?/g, '\n')
+  const code = String(options.text || '').replace(/\r\n?/g, '\n').replace(/\n+$/, '')
   const language = String(options.language || '').trim()
   const scale = options.scale || 1
   const width = Math.max(1, Math.ceil(options.width || 1))

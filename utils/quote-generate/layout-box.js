@@ -88,6 +88,13 @@ function measure (n) {
       const c = n.children[i]
       const cw = c.bleed ? c.w : c.w + n.pad.l + n.pad.r
       if (cw > outerW) outerW = cw
+    }
+    for (let i = 0; i < n.children.length; i++) {
+      const c = n.children[i]
+      if (c.bleed && c.w < outerW && c.w > 0) {
+        c.h = Math.round(c.h * (outerW / c.w))
+        c.w = outerW
+      }
       h += gapBefore(n, c, i) + c.h
     }
     n.w = outerW
@@ -128,8 +135,13 @@ function place (n, x, y, stretchW) {
     for (let i = 0; i < n.children.length; i++) {
       const c = n.children[i]
       let cx = x + n.pad.l
-      if (c.bleed) cx = x + Math.max(0, (n.w - c.w) / 2) // full-width child, centered
-      else if (n.align === 'center' && c.w < innerW) cx += (innerW - c.w) / 2
+      if (c.bleed) {
+        if (c.w < n.w && c.w > 0) {
+          c.h = Math.round(c.h * (n.w / c.w))
+          c.w = n.w
+        }
+        cx = x
+      } else if (n.align === 'center' && c.w < innerW) cx += (innerW - c.w) / 2
       cy += gapBefore(n, c, i)
       place(c, cx, cy, innerW)
       cy += c.h
