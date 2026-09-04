@@ -26,7 +26,7 @@ const SP = {
   maxHeader: 300, // header/forward-label width cap — longer names fade out instead of inflating the bubble
   radius: 25, // bubble corner radius
   radiusGrouped: 7, // corner radius facing a same-sender neighbour bubble
-  replyThumb: 36, // Telegram Desktop historyReplyPreview
+  replyThumb: 42, // Telegram Desktop historyReplyPreview
   shadowPad: 12, // canvas margin (right/bottom) so the drop shadow isn't clipped
   shadowPadTop: 4, // canvas margin above the bubble (shadow blur spills up a little)
   glass: 1.25, // frosted-glass hairline width (border + top edge highlight)
@@ -38,7 +38,7 @@ const SP = {
   // Accent block — the modern-Telegram rounded tinted block used for both
   // the reply preview and the partial-quote body: solid bar on the left,
   // accent tint behind, optional ❝ in the corner.
-  block: { padY: 5, padL: 9, padR: 9, padRIcon: 22, padRGift: 32, bar: 3, icon: 15, iconInset: 5, radius: 6, tint: 0.1, gap: 2 }
+  block: { padY: 7, padL: 11, padR: 11, padRIcon: 26, padRGift: 36, bar: 3.5, icon: 16, iconInset: 6, radius: 7, tint: 0.12, gap: 3.5 }
 }
 
 // Telegram Desktop's rank palette and geometry. Regular member tags are
@@ -162,7 +162,7 @@ function drawQuote (options) {
     // thumbnail (when the replied message has one) sits left of the texts.
     replyNameLeaf = leaf(reply.name)
     const textLine = reply.icon
-      ? box({ dir: 'row', gap: s(3), align: 'center', children: [leaf(reply.icon), leaf(reply.text)] })
+      ? box({ dir: 'row', gap: s(4), align: 'center', children: [leaf(reply.icon), leaf(reply.text)] })
       : leaf(reply.text)
     const replyTexts = box({ dir: 'col', gap: s(SP.block.gap), children: [replyNameLeaf, textLine] })
     const inner = reply.thumb
@@ -186,7 +186,7 @@ function drawQuote (options) {
       fillColor: reply.nameColor,
       backgroundEmoji: reply.backgroundEmoji,
       giftEmoji: reply.giftEmoji,
-      minW: s(reply.thumb ? 170 : 120),
+      minW: s(reply.thumb ? 180 : 130),
       children: [inner]
     })
     // Reply headers occupy the message's full content width, regardless of

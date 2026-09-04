@@ -128,8 +128,8 @@ class QuoteGenerate {
       }
     }
 
-    // Name uses canonical LyoSU font size (18px at 100% UI scale).
-    const nameSize = 18 * effectiveScale
+    // Name uses canonical LyoSU font size (20px at 100% UI scale to balance with 24px text).
+    const nameSize = 20 * effectiveScale
 
     let nameCanvas
     if (message.from && message.from.name !== false && (message.from.name || message.from.first_name || message.from.last_name)) {
@@ -292,19 +292,19 @@ class QuoteGenerate {
           replyEntities.unshift({ type: 'media_type', offset: 0, length: normalizedReplyText.length })
         }
 
-        // Reply uses canonical LyoSU font sizes (14px name, 15px text).
-        const replyNameFontSize = 14 * effectiveScale
+        // Reply preview font sizes: prominent and readable against 24px main text.
+        const replyNameFontSize = 19 * effectiveScale
         const replyNameCanvas = await drawMultilineText(
           normalizedReplyName, 'bold', replyNameFontSize, replyNameColor,
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
-        const replyTextFontSize = 15 * effectiveScale
+        const replyTextFontSize = 19 * effectiveScale
         const replyTextCanvas = await drawMultilineText(
           normalizedReplyText, replyEntities,
           replyTextFontSize, textColor,
           0, replyTextFontSize,
-          Math.max(replyTextFontSize * 4, width * 0.9 - (replyIconName ? 21 * effectiveScale : 0)),
+          Math.max(replyTextFontSize * 4, width * 0.9 - (replyIconName ? 24 * effectiveScale : 0)),
           manualQuote ? replyTextFontSize * 6 : replyTextFontSize,
           emojiBrand, this.telegram, null,
           { accentColor: replyNameColor }
@@ -322,7 +322,7 @@ class QuoteGenerate {
           }
 
           if (replyIconName) {
-            replyData.icon = drawReplyIcon(replyIconName, 18 * effectiveScale, replyNameColor)
+            replyData.icon = drawReplyIcon(replyIconName, 20 * effectiveScale, replyNameColor)
           }
 
           if (resolvedReplyColor.backgroundEmojiId || resolvedReplyColor.giftEmojiId) {
