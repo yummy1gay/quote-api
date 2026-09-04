@@ -280,7 +280,7 @@ function drawVoiceRow (waveform, duration, accent, textColor, scale, maxWidth) {
 /**
  * Document row: [accent file disc] [file name / size · EXT].
  */
-function drawDocumentRow (doc, accent, textColor, scale, maxWidth) {
+function drawDocumentRow (doc, accent, textColor, scale, maxWidth, minWidth = null) {
   // Attachment metrics came from a 16px Desktop message font, while the
   // quote renderer uses 24px body text. Scale document cards by the same
   // 1.5 ratio so their icon and both labels no longer look undersized.
@@ -300,7 +300,8 @@ function drawDocumentRow (doc, accent, textColor, scale, maxWidth) {
     meta,
     documentScale,
     maxWidth,
-    ROW.documentGap
+    ROW.documentGap,
+    minWidth
   )
 }
 
@@ -308,7 +309,7 @@ function drawDocumentRow (doc, accent, textColor, scale, maxWidth) {
  * Audio row: [cover or accent note disc] [title / performer · duration].
  * `thumb` is an optional Image/Canvas (already loaded).
  */
-function drawAudioRow (audio, accent, textColor, scale, maxWidth, thumb) {
+function drawAudioRow (audio, accent, textColor, scale, maxWidth, thumb, minWidth = null) {
   const s = (v) => v * scale
   const d = s(ROW.disc)
 
@@ -366,17 +367,26 @@ function drawAudioRow (audio, accent, textColor, scale, maxWidth, thumb) {
     .filter(Boolean).join(' · ')
   const title = drawLabel(String(audio.title || 'Audio'), s(ROW.title), textColor, { bold: true })
   const meta = metaText ? drawLabel(metaText, s(ROW.meta), textColor, { alpha: ROW.metaAlpha }) : null
-  return assembleRow(lead, title, meta, scale, maxWidth)
+  return assembleRow(lead, title, meta, scale, maxWidth, ROW.fileGap, minWidth)
 }
 
 // [disc] + up to two text lines, vertically centered against the disc.
-function assembleRow (disc, title, meta, scale, maxWidth, gapValue = ROW.fileGap) {
+function assembleRow (disc, title, meta, scale, maxWidth, gapValue = ROW.fileGap, minWidth = null) {
   const s = (v) => v * scale
   const gap = s(gapValue)
   const textW = Math.max(title.width, meta ? meta.width : 0)
   let w = Math.ceil(disc.width + gap + textW)
-  // Telegram reserves the full available file row even for short names.
-  if (maxWidth) w = Math.ceil(maxWidth)
+  if (minWidth) {
+    w = Math.max(w, Math.ceil(minWidth))
+  }
+  if (maxWidth) {
+    if (minWidth) {
+      w = Math.min(w, Math.ceil(maxWidth))
+    } else {
+      // Telegram reserves the full available file row even for short names.
+      w = Math.ceil(maxWidth)
+    }
+  }
   const textsH = title.height + (meta ? s(ROW.lineGap) + meta.height : 0)
   const h = Math.max(disc.height, textsH)
 

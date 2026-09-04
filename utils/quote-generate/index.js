@@ -368,7 +368,12 @@ class QuoteGenerate {
       // already carries the scale factor; the old `width / 3 * scale` only
       // matched this at scale 2 and ballooned at higher scales.
       maxMediaSize = width * 2 / 3
-      if (message.text && textCanvas && maxMediaSize < textCanvas.width) maxMediaSize = textCanvas.width
+      if (textCanvas && maxMediaSize < textCanvas.width) maxMediaSize = textCanvas.width
+      if (Array.isArray(textBlocks)) {
+        for (const b of textBlocks) {
+          if (b && b.canvas && maxMediaSize < b.canvas.width) maxMediaSize = b.canvas.width
+        }
+      }
 
       if (media && media.is_animated) {
         if (media.thumb) {
@@ -422,16 +427,33 @@ class QuoteGenerate {
     // Row-style attachments (rendered inside the bubble, like Telegram).
     let attachment = null
     let attachmentType = null
-    const attachMaxW = width * 2 / 3
+
+    let maxContentWidth = 0
+    if (textCanvas && textCanvas.width > maxContentWidth) maxContentWidth = textCanvas.width
+    if (Array.isArray(textBlocks)) {
+      for (const b of textBlocks) {
+        if (b && b.canvas && b.canvas.width > maxContentWidth) maxContentWidth = b.canvas.width
+      }
+    }
+    if (nameCanvas && nameCanvas.width > maxContentWidth) maxContentWidth = nameCanvas.width
+    if (replyData && replyData.canvas && replyData.canvas.width > maxContentWidth) maxContentWidth = replyData.canvas.width
+    if (mediaCanvas && mediaCanvas.width > maxContentWidth) maxContentWidth = mediaCanvas.width
+    if (venue && venue.title && venue.title.width > maxContentWidth) maxContentWidth = venue.title.width
+
+    const maxBubbleContentW = Math.max(1, width - Math.round(38 * scale))
+    const baseAttachW = Math.round(width * 2 / 3)
+    const attachMinW = Math.min(maxBubbleContentW, Math.max(baseAttachW, maxContentWidth))
+    const attachMaxW = maxBubbleContentW
+
     if (message.voice && Array.isArray(message.voice.waveform)) {
       attachmentType = 'voice'
       attachment = drawVoiceRow(
         message.voice.waveform, message.voice.duration,
-        nameColor, textColor, scale, attachMaxW
+        nameColor, textColor, scale, attachMinW
       )
     } else if (message.document) {
       attachmentType = 'document'
-      attachment = drawDocumentRow(message.document, nameColor, textColor, scale, attachMaxW)
+      attachment = drawDocumentRow(message.document, nameColor, textColor, scale, attachMaxW, attachMinW)
     } else if (message.audio) {
       attachmentType = 'audio'
       let audioThumb = null
@@ -446,7 +468,7 @@ class QuoteGenerate {
           console.warn('Failed to load audio thumb:', error.message)
         }
       }
-      attachment = drawAudioRow(message.audio, nameColor, textColor, scale, attachMaxW, audioThumb)
+      attachment = drawAudioRow(message.audio, nameColor, textColor, scale, attachMaxW, audioThumb, attachMinW)
     }
 
     // Video/GIF media badges, painted over the media by the composer.
