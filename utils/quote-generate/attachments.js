@@ -281,7 +281,7 @@ function drawVoiceRow (waveform, duration, accent, textColor, scale, maxWidth) {
  * Document row: [accent file disc] [file name / size · EXT].
  */
 function drawDocumentRow (doc, accent, textColor, scale, maxWidth, minWidth = null) {
-  const documentScale = scale
+  const documentScale = scale * 1.5
   const s = (v) => v * documentScale
   const d = s(ROW.disc)
   const name = String(doc.file_name || 'File')
