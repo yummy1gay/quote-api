@@ -2,10 +2,7 @@ const { createCanvas } = require('canvas')
 const { drawMultilineText } = require('./text-renderer')
 const { paintTDesktopIcon } = require('./tdesktop-icons')
 
-// Telegram Desktop: msgBotKbButton + botKbStyle from ui/chat/chat.style.
-// quote-api base message font is 16px. Keyboard metrics use UI factor 1.0
-// to match native Telegram Desktop dimensions (36px height, 15px font).
-const UI_SCALE = 1.0
+const UI_SCALE = 1.5
 const KB = {
   gap: 2 * UI_SCALE,
   padding: 10 * UI_SCALE,
