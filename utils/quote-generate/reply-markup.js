@@ -3,9 +3,9 @@ const { drawMultilineText } = require('./text-renderer')
 const { paintTDesktopIcon } = require('./tdesktop-icons')
 
 // Telegram Desktop: msgBotKbButton + botKbStyle from ui/chat/chat.style.
-// quote-api's message font is 24 logical px while Desktop's is 16, so the
-// native 15/36px keyboard metrics are scaled by the same 1.5 ratio.
-const UI_SCALE = 1.5
+// quote-api base message font is 16px. Keyboard metrics use UI factor 1.0
+// to match native Telegram Desktop dimensions (36px height, 15px font).
+const UI_SCALE = 1.0
 const KB = {
   gap: 2 * UI_SCALE,
   padding: 10 * UI_SCALE,
@@ -73,8 +73,10 @@ async function prepareReplyMarkup (markup, options = {}) {
   if (!rows.length) return null
 
   const scale = Number.isFinite(options.scale) ? options.scale : 1
+  const fontScale = Number.isFinite(options.fontSize) && options.fontSize > 0 ? options.fontSize / 16 : 1
   const maxWidth = Math.max(1, Math.min(options.maxWidth || 430 * scale, 430 * scale))
-  const fontSize = KB.textSize * scale
+  const fontSize = Math.round(KB.textSize * fontScale * scale)
+  const buttonHeight = Math.round(KB.height * Math.max(1, fontScale) * scale)
   for (const row of rows) {
     for (const button of row) {
       let labelText = button.text
@@ -98,7 +100,7 @@ async function prepareReplyMarkup (markup, options = {}) {
           0,
           fontSize,
           10000,
-          KB.height * scale,
+          buttonHeight,
           options.emojiBrand,
           options.telegram
         )
@@ -113,7 +115,7 @@ async function prepareReplyMarkup (markup, options = {}) {
           0,
           fontSize,
           10000,
-          KB.height * scale,
+          buttonHeight,
           options.emojiBrand,
           options.telegram
         )
@@ -134,8 +136,9 @@ async function prepareReplyMarkup (markup, options = {}) {
   return {
     rows,
     scale,
+    buttonHeight,
     dark: !!options.dark,
-    naturalWidth: Math.max(KB.height * scale, Math.min(maxWidth, Math.ceil(naturalWidth)))
+    naturalWidth: Math.max(buttonHeight, Math.min(maxWidth, Math.ceil(naturalWidth)))
   }
 }
 
@@ -151,7 +154,7 @@ function renderReplyMarkup (markup, requestedWidth, outerRadii) {
   if (!markup || !markup.rows || !markup.rows.length) return null
   const scale = markup.scale
   const gap = KB.gap * scale
-  const buttonHeight = KB.height * scale
+  const buttonHeight = markup.buttonHeight || (KB.height * scale)
   const width = Math.max(1, Math.ceil(requestedWidth))
   const height = Math.ceil(markup.rows.length * buttonHeight + (markup.rows.length - 1) * gap)
   const canvas = createCanvas(width, height)

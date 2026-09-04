@@ -106,6 +106,8 @@ module.exports = async (parm) => {
   const quoteGenerate = new QuoteGenerate(botToken)
   const rawScale = parseFloat(parm.scale) || 2
   const scale = Math.min(20, Math.max(1, Number.isFinite(rawScale) ? rawScale : 2))
+  const rawFontSize = parseFloat(parm.fontSize)
+  const fontSize = Number.isFinite(rawFontSize) && rawFontSize >= 8 && rawFontSize <= 60 ? rawFontSize : 16
   const rawBrand = parm.emojiBrand || 'apple'
   const emojiBrand = ALLOWED_EMOJI_BRANDS.has(rawBrand) ? rawBrand : 'apple'
 
@@ -156,7 +158,8 @@ module.exports = async (parm) => {
         parm.width,
         parm.height,
         scale,
-        emojiBrand
+        emojiBrand,
+        { fontSize }
       )
       if (!canvas) failures[index] = 'renderer returned no canvas'
       return canvas
@@ -177,7 +180,8 @@ module.exports = async (parm) => {
             parm.width,
             parm.height,
             scale,
-            emojiBrand
+            emojiBrand,
+            { fontSize }
           )
           if (canvas) {
             console.warn(`Rendered message ${index} without reply markup after its keyboard failed`)

@@ -60,13 +60,18 @@ class QuoteGenerate {
     this.telegram = new Telegram(botToken, process.env.BOT_API_ROOT ? { apiRoot: process.env.BOT_API_ROOT } : undefined)
   }
 
-  async generate (backgroundColorOne, backgroundColorTwo, message, width, height, scale, emojiBrand) {
+  async generate (backgroundColorOne, backgroundColorTwo, message, width, height, scale, emojiBrand, options = {}) {
     await loadIcons() // warm white icon sprites (no-op after first call)
     scale = scale || 2
     if (!Number.isFinite(scale) || scale < 1) scale = 1
     if (scale > 20) scale = 20
     width = Math.max(1, (width || 512) * scale)
     height = Math.max(1, (height || 512) * scale)
+
+    const opts = typeof options === 'number' ? { fontSize: options } : (options || {})
+    const rawFontSize = parseFloat(message && message.fontSize != null ? message.fontSize : opts.fontSize)
+    const baseFontSize = Number.isFinite(rawFontSize) && rawFontSize >= 8 && rawFontSize <= 60 ? rawFontSize : 16
+    const fontScale = baseFontSize / 16
 
     const backStyle = lightOrDark(backgroundColorOne)
     const nameColorArray = backStyle === 'light' ? NAME_COLORS_LIGHT : NAME_COLORS_DARK
@@ -77,6 +82,7 @@ class QuoteGenerate {
         try {
           serviceMarkup = await prepareReplyMarkup(message.replyMarkup, {
             scale,
+            fontSize: baseFontSize,
             maxWidth: Math.min(width - 30 * scale, 430 * scale),
             dark: backStyle === 'dark',
             emojiBrand,
@@ -88,6 +94,7 @@ class QuoteGenerate {
       }
       return renderServiceMessage(message.service, {
         scale,
+        fontSize: baseFontSize,
         width,
         height,
         dark: backStyle === 'dark',
@@ -116,7 +123,7 @@ class QuoteGenerate {
     }
 
     // Name uses the same base font size as message text (like Telegram Desktop fsize semibold).
-    const nameSize = 16 * scale
+    const nameSize = baseFontSize * scale
 
     let nameCanvas
     if (message.from && message.from.name !== false && (message.from.name || message.from.first_name || message.from.last_name)) {
@@ -164,7 +171,7 @@ class QuoteGenerate {
       }
     }
 
-    const fontSize = 16 * scale
+    const fontSize = baseFontSize * scale
     let textColor = backStyle === 'light' ? '#000' : '#fff'
 
     let richContent = null
@@ -172,6 +179,7 @@ class QuoteGenerate {
       try {
         richContent = await renderRichMessage(message.richMessage, {
           scale,
+          fontSize: baseFontSize,
           width,
           height: height - fontSize,
           color: textColor,
@@ -202,7 +210,7 @@ class QuoteGenerate {
                 text: part.text,
                 language: part.language,
                 width,
-                fontSize: 16 * scale,
+                fontSize,
                 scale,
                 color: textColor,
                 muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
@@ -278,13 +286,13 @@ class QuoteGenerate {
           replyEntities.unshift({ type: 'media_type', offset: 0, length: normalizedReplyText.length })
         }
 
-        const replyNameFontSize = 16 * scale
+        const replyNameFontSize = baseFontSize * scale
         const replyNameCanvas = await drawMultilineText(
           normalizedReplyName, 'bold', replyNameFontSize, replyNameColor,
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
-        const replyTextFontSize = 16 * scale
+        const replyTextFontSize = baseFontSize * scale
         const replyTextCanvas = await drawMultilineText(
           normalizedReplyText, replyEntities,
           replyTextFontSize, textColor,
@@ -400,8 +408,8 @@ class QuoteGenerate {
     let venue = null
     if (message.venue && (message.venue.title || message.venue.address)) {
       const venueMaxWidth = Math.max(1, (maxMediaSize || width * 2 / 3) - 32 * scale)
-      const venueTitleSize = 16 * scale
-      const venueAddressSize = 14 * scale
+      const venueTitleSize = baseFontSize * scale
+      const venueAddressSize = Math.round(14 * fontScale) * scale
       const venueTitle = String(message.venue.title || '')
       const venueAddress = String(message.venue.address || '')
       const titleCanvas = venueTitle
@@ -495,6 +503,7 @@ class QuoteGenerate {
       try {
         replyMarkup = await prepareReplyMarkup(message.replyMarkup, {
           scale,
+          fontSize: baseFontSize,
           maxWidth: width,
           dark: backStyle === 'dark',
           emojiBrand,
@@ -509,7 +518,7 @@ class QuoteGenerate {
     let viaBotCanvas = null
     if (message.viaBot) {
       const viaText = `via @${String(message.viaBot).replace(/^@/, '')}`
-      viaBotCanvas = drawLabel(viaText, 13 * scale, nameColor, { alpha: 0.8 })
+      viaBotCanvas = drawLabel(viaText, Math.round(13 * fontScale) * scale, nameColor, { alpha: 0.8 })
     }
 
     // Nothing to render — skip this message
@@ -519,6 +528,7 @@ class QuoteGenerate {
 
     return drawQuote({
       scale,
+      fontSize: baseFontSize,
       background: {
         colorOne: backgroundColorOne,
         colorTwo: backgroundColorTwo,

@@ -11,12 +11,13 @@ const UI = 1.0
 
 async function renderServiceMessage (service, options = {}) {
   const scale = Number.isFinite(options.scale) ? options.scale : 1
+  const fontScale = Number.isFinite(options.fontSize) && options.fontSize > 0 ? options.fontSize / 16 : 1
   const targetWidth = Math.max(1, Math.ceil(options.width || 512 * scale))
   const targetHeight = Math.max(1, Math.ceil(options.height || 768 * scale))
   const text = String(service && service.text ? service.text : 'Service message')
   const entities = Array.isArray(service && service.entities) ? service.entities : []
 
-  const fontSize = 13 * UI * scale
+  const fontSize = Math.round(13 * fontScale) * UI * scale
   const padX = 12 * UI * scale
   const padTop = 3 * UI * scale
   const padBottom = 4 * UI * scale

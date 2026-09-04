@@ -92,10 +92,13 @@ function drawQuote (options) {
     senderTag,
     viaBot, // pre-rendered "via @bot" canvas (or null)
     groupPos = 'single', // single | first | middle | last — corners facing a same-sender neighbour flatten
-    isQuote
+    isQuote,
+    fontSize = 16
   } = options
 
   const s = (v) => v * scale
+  const baseFontSize = Number.isFinite(fontSize) && fontSize > 0 ? fontSize : 16
+  const lineHeight = Math.ceil(baseFontSize * scale * 1.36)
   const accent = nameColor || background.textColor || '#fff'
 
   const mediaType = media ? media.type : null
@@ -296,7 +299,6 @@ function drawQuote (options) {
   if (Array.isArray(textBlocks) && textBlocks.length > 0 && !isQuote) {
     // Structural text runs stack in one column; only quote runs receive the
     // sender accent treatment. Pre blocks paint their own neutral chrome.
-    const lineHeight = Math.ceil(16 * scale * 1.36)
     const parts = textBlocks.map((b, i) => {
       const extraMt = (b.emptyLinesBefore || 0) * lineHeight
       if (b.quote) {
@@ -331,7 +333,6 @@ function drawQuote (options) {
     // file row's bottom padding; the generic zero-gap text rule made captions
     // stick directly to the enlarged icon. Media captions also need top air.
     const firstSolid = Array.isArray(textBlocks) && textBlocks.length > 0 && (textBlocks[0].pre || textBlocks[0].quote)
-    const lineHeight = Math.ceil(16 * scale * 1.36)
     const extraFirstMt = (Array.isArray(textBlocks) && textBlocks[0] && textBlocks[0].emptyLinesBefore)
       ? textBlocks[0].emptyLinesBefore * lineHeight
       : 0
