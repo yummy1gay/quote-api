@@ -92,13 +92,11 @@ function drawQuote (options) {
     senderTag,
     viaBot, // pre-rendered "via @bot" canvas (or null)
     groupPos = 'single', // single | first | middle | last — corners facing a same-sender neighbour flatten
-    isQuote,
-    fontSize = 16
+    isQuote
   } = options
 
   const s = (v) => v * scale
-  const baseFontSize = Number.isFinite(fontSize) && fontSize > 0 ? fontSize : 16
-  const lineHeight = Math.ceil(baseFontSize * scale * 1.36)
+  const lineHeight = Math.ceil(16 * scale * 1.36)
   const accent = nameColor || background.textColor || '#fff'
 
   const mediaType = media ? media.type : null

@@ -1229,7 +1229,7 @@ async function renderBlock (block, context, depth = 0) {
     footer: 14
   }
   if (textSizes[type]) {
-    return text(block.text, Math.round(textSizes[type] * (context.fontScale || 1)) * s, context.color, context.width, type === 'kicker' ? 'bold' : null)
+    return text(block.text, Math.round(textSizes[type] * s), context.color, context.width, type === 'kicker' ? 'bold' : null)
   }
   if (type === 'paragraph' || type === 'thinking') {
     const textColor = type === 'thinking' ? context.muted : context.color
@@ -1409,14 +1409,12 @@ async function renderBlocks (blocks, context, depth = 0) {
 
 async function renderRichMessage (rich, options) {
   if (!rich || !Array.isArray(rich.blocks)) return null
-  const baseSize = Number.isFinite(options.fontSize) && options.fontSize > 0 ? options.fontSize : 16
-  const fontScale = baseSize / 16
+  const s = options.scale
   const context = {
-    scale: options.scale,
-    font: baseSize * options.scale,
-    fontScale,
-    small: Math.round(14 * fontScale) * options.scale,
-    tableFont: baseSize * options.scale,
+    scale: s,
+    font: 16 * s,
+    small: 14 * s,
+    tableFont: 16 * s,
     color: options.color,
     muted: options.muted,
     accent: options.accent,

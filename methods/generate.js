@@ -106,8 +106,11 @@ module.exports = async (parm) => {
   const quoteGenerate = new QuoteGenerate(botToken)
   const rawScale = parseFloat(parm.scale) || 2
   const scale = Math.min(20, Math.max(1, Number.isFinite(rawScale) ? rawScale : 2))
-  const rawFontSize = parseFloat(parm.fontSize)
-  const fontSize = Number.isFinite(rawFontSize) && rawFontSize >= 8 && rawFontSize <= 60 ? rawFontSize : 16
+  const rawUiScale = parseFloat(parm.uiScale || parm.interfaceScale || parm.scalePercent)
+  const uiScale = Number.isFinite(rawUiScale) && rawUiScale > 0
+    ? (rawUiScale <= 5 ? rawUiScale * 100 : rawUiScale)
+    : 100
+  const uiFactor = Math.max(0.5, Math.min(3.0, uiScale / 100))
   const rawBrand = parm.emojiBrand || 'apple'
   const emojiBrand = ALLOWED_EMOJI_BRANDS.has(rawBrand) ? rawBrand : 'apple'
 
@@ -159,7 +162,7 @@ module.exports = async (parm) => {
         parm.height,
         scale,
         emojiBrand,
-        { fontSize }
+        { uiScale }
       )
       if (!canvas) failures[index] = 'renderer returned no canvas'
       return canvas
@@ -181,7 +184,7 @@ module.exports = async (parm) => {
             parm.height,
             scale,
             emojiBrand,
-            { fontSize }
+            { uiScale }
           )
           if (canvas) {
             console.warn(`Rendered message ${index} without reply markup after its keyboard failed`)
@@ -255,7 +258,7 @@ module.exports = async (parm) => {
       const grouped = pairs[index].message.chatId === pairs[index + 1].message.chatId &&
         !pairs[index].message.service && !pairs[index + 1].message.service
       const touchesService = pairs[index].message.service || pairs[index + 1].message.service
-      const m = (grouped || touchesService ? 2 : 6) * scale
+      const m = Math.round((grouped || touchesService ? 2 : 6) * scale * uiFactor)
       margins.push(m)
       totalMargin += m
     }
@@ -306,8 +309,8 @@ module.exports = async (parm) => {
     if (format === 'png') quoteImage = await imageSharp.png().toBuffer()
     else quoteImage = await imageSharp.webp({ lossless: true, force: true }).toBuffer()
   } else if (type === 'image') {
-    const heightPadding = 75 * scale
-    const widthPadding = 95 * scale
+    const heightPadding = Math.round(75 * scale * uiFactor)
+    const widthPadding = Math.round(95 * scale * uiFactor)
 
     // Draw canvas-to-canvas directly — no need for toBuffer() -> loadImage() round-trip
     const canvasPic = createCanvas(canvasQuote.width + widthPadding, canvasQuote.height + heightPadding)

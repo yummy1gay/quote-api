@@ -73,10 +73,9 @@ async function prepareReplyMarkup (markup, options = {}) {
   if (!rows.length) return null
 
   const scale = Number.isFinite(options.scale) ? options.scale : 1
-  const fontScale = Number.isFinite(options.fontSize) && options.fontSize > 0 ? options.fontSize / 16 : 1
   const maxWidth = Math.max(1, Math.min(options.maxWidth || 430 * scale, 430 * scale))
-  const fontSize = Math.round(KB.textSize * fontScale * scale)
-  const buttonHeight = Math.round(KB.height * Math.max(1, fontScale) * scale)
+  const fontSize = Math.round(KB.textSize * scale)
+  const buttonHeight = Math.round(KB.height * scale)
   for (const row of rows) {
     for (const button of row) {
       let labelText = button.text

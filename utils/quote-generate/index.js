@@ -68,10 +68,17 @@ class QuoteGenerate {
     width = Math.max(1, (width || 512) * scale)
     height = Math.max(1, (height || 512) * scale)
 
-    const opts = typeof options === 'number' ? { fontSize: options } : (options || {})
-    const rawFontSize = parseFloat(message && message.fontSize != null ? message.fontSize : opts.fontSize)
-    const baseFontSize = Number.isFinite(rawFontSize) && rawFontSize >= 8 && rawFontSize <= 60 ? rawFontSize : 16
-    const fontScale = baseFontSize / 16
+    const opts = typeof options === 'number' ? { uiScale: options } : (options || {})
+    const rawUiScale = parseFloat(message && message.uiScale != null
+      ? message.uiScale
+      : (message && message.interfaceScale != null
+        ? message.interfaceScale
+        : (message && message.scalePercent != null ? message.scalePercent : (opts.uiScale != null ? opts.uiScale : (opts.interfaceScale != null ? opts.interfaceScale : opts.scalePercent)))))
+    const uiScale = Number.isFinite(rawUiScale) && rawUiScale > 0
+      ? (rawUiScale <= 5 ? rawUiScale * 100 : rawUiScale)
+      : 100
+    const uiFactor = Math.max(0.5, Math.min(3.0, uiScale / 100))
+    const effectiveScale = scale * uiFactor
 
     const backStyle = lightOrDark(backgroundColorOne)
     const nameColorArray = backStyle === 'light' ? NAME_COLORS_LIGHT : NAME_COLORS_DARK
@@ -81,9 +88,8 @@ class QuoteGenerate {
       if (message.replyMarkup) {
         try {
           serviceMarkup = await prepareReplyMarkup(message.replyMarkup, {
-            scale,
-            fontSize: baseFontSize,
-            maxWidth: Math.min(width - 30 * scale, 430 * scale),
+            scale: effectiveScale,
+            maxWidth: Math.min(width - 30 * effectiveScale, 430 * effectiveScale),
             dark: backStyle === 'dark',
             emojiBrand,
             telegram: this.telegram
@@ -93,8 +99,7 @@ class QuoteGenerate {
         }
       }
       return renderServiceMessage(message.service, {
-        scale,
-        fontSize: baseFontSize,
+        scale: effectiveScale,
         width,
         height,
         dark: backStyle === 'dark',
@@ -122,8 +127,8 @@ class QuoteGenerate {
       }
     }
 
-    // Name uses the same base font size as message text (like Telegram Desktop fsize semibold).
-    const nameSize = baseFontSize * scale
+    // Name uses canonical Telegram Desktop font size (16px at 100% UI scale).
+    const nameSize = 16 * effectiveScale
 
     let nameCanvas
     if (message.from && message.from.name !== false && (message.from.name || message.from.first_name || message.from.last_name)) {
@@ -171,15 +176,14 @@ class QuoteGenerate {
       }
     }
 
-    const fontSize = baseFontSize * scale
+    const fontSize = 16 * effectiveScale
     let textColor = backStyle === 'light' ? '#000' : '#fff'
 
     let richContent = null
     if (message.richMessage) {
       try {
         richContent = await renderRichMessage(message.richMessage, {
-          scale,
-          fontSize: baseFontSize,
+          scale: effectiveScale,
           width,
           height: height - fontSize,
           color: textColor,
@@ -211,7 +215,7 @@ class QuoteGenerate {
                 language: part.language,
                 width,
                 fontSize,
-                scale,
+                scale: effectiveScale,
                 color: textColor,
                 muted: backStyle === 'light' ? '#66717f' : '#aeb7c4',
                 dark: backStyle === 'dark'
@@ -286,18 +290,18 @@ class QuoteGenerate {
           replyEntities.unshift({ type: 'media_type', offset: 0, length: normalizedReplyText.length })
         }
 
-        const replyNameFontSize = baseFontSize * scale
+        const replyNameFontSize = 16 * effectiveScale
         const replyNameCanvas = await drawMultilineText(
           normalizedReplyName, 'bold', replyNameFontSize, replyNameColor,
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
-        const replyTextFontSize = baseFontSize * scale
+        const replyTextFontSize = 16 * effectiveScale
         const replyTextCanvas = await drawMultilineText(
           normalizedReplyText, replyEntities,
           replyTextFontSize, textColor,
           0, replyTextFontSize,
-          Math.max(replyTextFontSize * 4, width * 0.9 - (replyIconName ? 21 * scale : 0)),
+          Math.max(replyTextFontSize * 4, width * 0.9 - (replyIconName ? 21 * effectiveScale : 0)),
           manualQuote ? replyTextFontSize * 6 : replyTextFontSize,
           emojiBrand, this.telegram, null,
           { accentColor: replyNameColor }
@@ -315,7 +319,7 @@ class QuoteGenerate {
           }
 
           if (replyIconName) {
-            replyData.icon = drawReplyIcon(replyIconName, 18 * scale, replyNameColor)
+            replyData.icon = drawReplyIcon(replyIconName, 18 * effectiveScale, replyNameColor)
           }
 
           if (resolvedReplyColor.backgroundEmojiId || resolvedReplyColor.giftEmojiId) {
@@ -407,9 +411,9 @@ class QuoteGenerate {
     // address are a dedicated caption area (not part of message.text).
     let venue = null
     if (message.venue && (message.venue.title || message.venue.address)) {
-      const venueMaxWidth = Math.max(1, (maxMediaSize || width * 2 / 3) - 32 * scale)
-      const venueTitleSize = baseFontSize * scale
-      const venueAddressSize = Math.round(14 * fontScale) * scale
+      const venueMaxWidth = Math.max(1, (maxMediaSize || width * 2 / 3) - 32 * effectiveScale)
+      const venueTitleSize = 16 * effectiveScale
+      const venueAddressSize = 14 * effectiveScale
       const venueTitle = String(message.venue.title || '')
       const venueAddress = String(message.venue.address || '')
       const titleCanvas = venueTitle
@@ -447,7 +451,7 @@ class QuoteGenerate {
     if (mediaCanvas && mediaCanvas.width > maxContentWidth) maxContentWidth = mediaCanvas.width
     if (venue && venue.title && venue.title.width > maxContentWidth) maxContentWidth = venue.title.width
 
-    const maxBubbleContentW = Math.max(1, width - Math.round(38 * scale))
+    const maxBubbleContentW = Math.max(1, width - Math.round(38 * effectiveScale))
     const baseAttachW = Math.round(width * 2 / 3)
     const attachMinW = Math.min(maxBubbleContentW, Math.max(baseAttachW, maxContentWidth))
     const attachMaxW = maxBubbleContentW
@@ -456,11 +460,11 @@ class QuoteGenerate {
       attachmentType = 'voice'
       attachment = drawVoiceRow(
         message.voice.waveform, message.voice.duration,
-        nameColor, textColor, scale, attachMinW
+        nameColor, textColor, effectiveScale, attachMinW
       )
     } else if (message.document) {
       attachmentType = 'document'
-      attachment = drawDocumentRow(message.document, nameColor, textColor, scale, attachMaxW, attachMinW)
+      attachment = drawDocumentRow(message.document, nameColor, textColor, effectiveScale, attachMaxW, attachMinW)
     } else if (message.audio) {
       attachmentType = 'audio'
       let audioThumb = null
@@ -475,7 +479,7 @@ class QuoteGenerate {
           console.warn('Failed to load audio thumb:', error.message)
         }
       }
-      attachment = drawAudioRow(message.audio, nameColor, textColor, scale, attachMaxW, audioThumb, attachMinW)
+      attachment = drawAudioRow(message.audio, nameColor, textColor, effectiveScale, attachMaxW, audioThumb, attachMinW)
     }
 
     // Video/GIF media badges, painted over the media by the composer.
@@ -502,8 +506,7 @@ class QuoteGenerate {
     if (message.replyMarkup) {
       try {
         replyMarkup = await prepareReplyMarkup(message.replyMarkup, {
-          scale,
-          fontSize: baseFontSize,
+          scale: effectiveScale,
           maxWidth: width,
           dark: backStyle === 'dark',
           emojiBrand,
@@ -518,7 +521,7 @@ class QuoteGenerate {
     let viaBotCanvas = null
     if (message.viaBot) {
       const viaText = `via @${String(message.viaBot).replace(/^@/, '')}`
-      viaBotCanvas = drawLabel(viaText, Math.round(13 * fontScale) * scale, nameColor, { alpha: 0.8 })
+      viaBotCanvas = drawLabel(viaText, Math.round(13 * effectiveScale), nameColor, { alpha: 0.8 })
     }
 
     // Nothing to render — skip this message
@@ -527,8 +530,7 @@ class QuoteGenerate {
     }
 
     return drawQuote({
-      scale,
-      fontSize: baseFontSize,
+      scale: effectiveScale,
       background: {
         colorOne: backgroundColorOne,
         colorTwo: backgroundColorTwo,
