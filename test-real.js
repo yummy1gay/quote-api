@@ -44,10 +44,10 @@ async function main () {
   const tg = { getCustomEmojiStickers: async () => [] }
 
   // Mirrors the production scale in utils/quote-generate/index.js
-  const nameSize = 18 * scale
-  const fontSize = 24 * scale
-  const replyNameSize = 14 * scale
-  const replyTextSize = 15 * scale
+  const nameSize = 16 * scale
+  const fontSize = 16 * scale
+  const replyNameSize = 16 * scale
+  const replyTextSize = 16 * scale
 
   async function mkName (text, color) {
     const canvas = await drawMultilineText(text, [{ type: 'bold', offset: 0, length: text.length }], nameSize, color, 0, nameSize, width, nameSize, 'apple', tg)

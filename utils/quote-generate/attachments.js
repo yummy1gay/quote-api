@@ -281,10 +281,7 @@ function drawVoiceRow (waveform, duration, accent, textColor, scale, maxWidth) {
  * Document row: [accent file disc] [file name / size · EXT].
  */
 function drawDocumentRow (doc, accent, textColor, scale, maxWidth, minWidth = null) {
-  // Attachment metrics came from a 16px Desktop message font, while the
-  // quote renderer uses 24px body text. Scale document cards by the same
-  // 1.5 ratio so their icon and both labels no longer look undersized.
-  const documentScale = scale * 1.5
+  const documentScale = scale
   const s = (v) => v * documentScale
   const d = s(ROW.disc)
   const name = String(doc.file_name || 'File')

@@ -5,10 +5,9 @@ const { layoutText } = require('./text-layout')
 const { renderText } = require('./text-render')
 const { renderReplyMarkup } = require('./reply-markup')
 
-// quote-api renders Telegram's 16px message font at 24 logical pixels.
-// Applying the same 1.5 ratio to the native service-message metrics keeps
-// the pill, photo and gaps in the same proportion as Telegram Desktop.
-const UI = 1.5
+// quote-api base message font is 16px. Service message metrics
+// use UI factor 1.0 to match the Telegram Desktop scale.
+const UI = 1.0
 
 async function renderServiceMessage (service, options = {}) {
   const scale = Number.isFinite(options.scale) ? options.scale : 1

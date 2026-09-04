@@ -115,9 +115,8 @@ class QuoteGenerate {
       }
     }
 
-    // Name is noticeably smaller than the message text (like Telegram), so
-    // the eye lands on the content first.
-    const nameSize = 18 * scale
+    // Name uses the same base font size as message text (like Telegram Desktop fsize semibold).
+    const nameSize = 16 * scale
 
     let nameCanvas
     if (message.from && message.from.name !== false && (message.from.name || message.from.first_name || message.from.last_name)) {
@@ -165,7 +164,7 @@ class QuoteGenerate {
       }
     }
 
-    const fontSize = 24 * scale
+    const fontSize = 16 * scale
     let textColor = backStyle === 'light' ? '#000' : '#fff'
 
     let richContent = null
@@ -213,7 +212,7 @@ class QuoteGenerate {
                 part.text, part.entities, fontSize, textColor,
                 0, fontSize, width, height - fontSize, emojiBrand, this.telegram
               )
-            textBlocks.push({ canvas, quote: part.quote, pre: part.pre })
+            textBlocks.push({ canvas, quote: part.quote, pre: part.pre, emptyLinesBefore: part.emptyLinesBefore || 0 })
           }
           textCanvas = textBlocks[0] && textBlocks[0].canvas // width hints below
         } else {
@@ -279,13 +278,13 @@ class QuoteGenerate {
           replyEntities.unshift({ type: 'media_type', offset: 0, length: normalizedReplyText.length })
         }
 
-        const replyNameFontSize = 14 * scale
+        const replyNameFontSize = 16 * scale
         const replyNameCanvas = await drawMultilineText(
           normalizedReplyName, 'bold', replyNameFontSize, replyNameColor,
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
-        const replyTextFontSize = 14 * scale
+        const replyTextFontSize = 16 * scale
         const replyTextCanvas = await drawMultilineText(
           normalizedReplyText, replyEntities,
           replyTextFontSize, textColor,
@@ -401,8 +400,8 @@ class QuoteGenerate {
     let venue = null
     if (message.venue && (message.venue.title || message.venue.address)) {
       const venueMaxWidth = Math.max(1, (maxMediaSize || width * 2 / 3) - 32 * scale)
-      const venueTitleSize = 18 * scale
-      const venueAddressSize = 16 * scale
+      const venueTitleSize = 16 * scale
+      const venueAddressSize = 14 * scale
       const venueTitle = String(message.venue.title || '')
       const venueAddress = String(message.venue.address || '')
       const titleCanvas = venueTitle
@@ -589,56 +588,93 @@ function splitStructuralBlocks (text, entities) {
 
   const parts = []
   let pos = 0
+  let pendingEmptyLines = 0
+
   for (const block of blocks) {
     if (block.offset < pos) continue // overlapping blocks — keep the first
     if (block.offset > pos) {
-      let rawPlain = text.slice(pos, block.offset)
-      let startOffset = pos
-      if (pos > 0) {
-        const leading = (rawPlain.match(/^\n+/) || [''])[0].length
-        rawPlain = rawPlain.slice(leading)
-        startOffset += leading
-      }
-      const trailing = (rawPlain.match(/\n+$/) || [''])[0].length
-      const endOffset = startOffset + rawPlain.length - trailing
-      const plain = rawPlain.slice(0, rawPlain.length - trailing)
-      if (plain) {
-        parts.push({
-          text: plain,
-          entities: sliceEntities(startOffset, endOffset),
-          quote: false,
-          pre: false
-        })
+      const rawPlain = text.slice(pos, block.offset)
+      const isOnlyWhitespace = !/\S/.test(rawPlain)
+
+      if (isOnlyWhitespace) {
+        // Between two structural blocks with only newlines/spaces
+        const newlineCount = (rawPlain.match(/\n/g) || []).length
+        // If pos === 0, any newlines are leading empty lines before the first block.
+        // Otherwise, the 1st newline is the block separator; each extra newline is a blank line.
+        const emptyCount = pos === 0 ? newlineCount : Math.max(0, newlineCount - 1)
+        if (emptyCount > 0) {
+          pendingEmptyLines += emptyCount
+        }
+      } else {
+        // Actual text between blocks
+        const leadingBreaks = (rawPlain.match(/^\n+/) || [''])[0].length
+        if (pos > 0 && leadingBreaks > 1) {
+          pendingEmptyLines += leadingBreaks - 1
+        } else if (pos === 0 && leadingBreaks > 0) {
+          pendingEmptyLines += leadingBreaks
+        }
+
+        const trailingBreaks = (rawPlain.match(/\n+$/) || [''])[0].length
+        const startOffset = pos + leadingBreaks
+        const endOffset = block.offset - trailingBreaks
+        const plain = rawPlain.slice(leadingBreaks, rawPlain.length - trailingBreaks)
+
+        if (plain) {
+          parts.push({
+            text: plain,
+            entities: sliceEntities(startOffset, endOffset),
+            quote: false,
+            pre: false,
+            emptyLinesBefore: pendingEmptyLines
+          })
+          pendingEmptyLines = 0
+        }
+        if (trailingBreaks > 1) {
+          pendingEmptyLines = trailingBreaks - 1
+        }
       }
     }
+
     parts.push({
       text: text.slice(block.offset, block.offset + block.length),
       entities: sliceEntities(block.offset, block.offset + block.length),
       quote: block.type !== 'pre',
       pre: block.type === 'pre',
-      language: block.language || ''
+      language: block.language || '',
+      emptyLinesBefore: pendingEmptyLines
     })
+    pendingEmptyLines = 0
     pos = block.offset + block.length
   }
+
   if (pos < text.length) {
-    const leadingBreaks = (text.slice(pos).match(/^\n+/) || [''])[0].length
-    const tailStart = pos + leadingBreaks
-    const rawTail = text.slice(tailStart)
-    const trailingBreaks = (rawTail.match(/\n+$/) || [''])[0].length
-    const tailEnd = tailStart + rawTail.length - trailingBreaks
-    const tail = rawTail.slice(0, rawTail.length - trailingBreaks)
-    if (tail) {
-      parts.push({
-        text: tail,
-        entities: sliceEntities(tailStart, tailEnd),
-        quote: false,
-        pre: false
-      })
+    const rawTail = text.slice(pos)
+    const isOnlyWhitespace = !/\S/.test(rawTail)
+    if (!isOnlyWhitespace) {
+      const leadingBreaks = (rawTail.match(/^\n+/) || [''])[0].length
+      if (leadingBreaks > 1) {
+        pendingEmptyLines += leadingBreaks - 1
+      }
+      const trailingBreaks = (rawTail.match(/\n+$/) || [''])[0].length
+      const tailStart = pos + leadingBreaks
+      const tailEnd = text.length - trailingBreaks
+      const tail = rawTail.slice(leadingBreaks, rawTail.length - trailingBreaks)
+      if (tail) {
+        parts.push({
+          text: tail,
+          entities: sliceEntities(tailStart, tailEnd),
+          quote: false,
+          pre: false,
+          emptyLinesBefore: pendingEmptyLines
+        })
+      }
     }
   }
+
   return parts.length > 0 ? parts : null
 }
 
 module.exports = QuoteGenerate
 module.exports.loadFonts = loadFonts
 module.exports.gradientTint = gradientTint
+module.exports.splitStructuralBlocks = splitStructuralBlocks

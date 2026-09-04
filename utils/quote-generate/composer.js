@@ -296,10 +296,26 @@ function drawQuote (options) {
   if (Array.isArray(textBlocks) && textBlocks.length > 0 && !isQuote) {
     // Structural text runs stack in one column; only quote runs receive the
     // sender accent treatment. Pre blocks paint their own neutral chrome.
-    const parts = textBlocks.map((b) => {
-      if (b.quote) return accentBlock(s, accent, { icon: true, children: [leaf(b.canvas)] })
+    const lineHeight = Math.ceil(16 * scale * 1.36)
+    const parts = textBlocks.map((b, i) => {
+      const extraMt = (b.emptyLinesBefore || 0) * lineHeight
+      if (b.quote) {
+        const node = accentBlock(s, accent, { icon: true, children: [leaf(b.canvas)] })
+        if (i > 0) node.mt = s(5) + extraMt
+        return node
+      }
       const l = leaf(b.canvas)
-      if (l) l.mt = b.pre ? s(4) : s(2) // plain runs carry metric air; pre is a solid block
+      if (l && i > 0) {
+        const prev = textBlocks[i - 1]
+        const prevSolid = prev && (prev.pre || prev.quote)
+        if (b.pre) {
+          l.mt = (prevSolid ? s(6) : s(5)) + extraMt
+        } else if (prevSolid) {
+          l.mt = s(5) + extraMt
+        } else {
+          l.mt = s(2) + extraMt
+        }
+      }
       return l
     })
     textNode = box({ dir: 'col', gap: s(5), children: parts })
@@ -314,7 +330,22 @@ function drawQuote (options) {
     // A document's message text is its caption. Desktop places it after the
     // file row's bottom padding; the generic zero-gap text rule made captions
     // stick directly to the enlarged icon. Media captions also need top air.
-    textNode.mt = mediaCanvas ? s(SP.padY) : (isDocumentAttachment ? s(12) : 0)
+    const firstSolid = Array.isArray(textBlocks) && textBlocks.length > 0 && (textBlocks[0].pre || textBlocks[0].quote)
+    const lineHeight = Math.ceil(16 * scale * 1.36)
+    const extraFirstMt = (Array.isArray(textBlocks) && textBlocks[0] && textBlocks[0].emptyLinesBefore)
+      ? textBlocks[0].emptyLinesBefore * lineHeight
+      : 0
+    if (mediaCanvas) {
+      textNode.mt = s(SP.padY) + extraFirstMt
+    } else if (isDocumentAttachment) {
+      textNode.mt = s(12) + extraFirstMt
+    } else if (replyNode) {
+      textNode.mt = (firstSolid ? s(6) : 0) + extraFirstMt
+    } else if (headerNode || forwardNode) {
+      textNode.mt = (firstSolid ? s(6) : 0) + extraFirstMt
+    } else {
+      textNode.mt = extraFirstMt
+    }
   }
 
   // ---- Tree ---------------------------------------------------------------
