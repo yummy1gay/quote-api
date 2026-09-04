@@ -65,8 +65,6 @@ class QuoteGenerate {
     scale = scale || 2
     if (!Number.isFinite(scale) || scale < 1) scale = 1
     if (scale > 20) scale = 20
-    width = Math.max(1, (width || 512) * scale)
-    height = Math.max(1, (height || 512) * scale)
 
     const opts = typeof options === 'number' ? { uiScale: options } : (options || {})
     const rawUiScale = parseFloat(message && message.uiScale != null
@@ -79,6 +77,9 @@ class QuoteGenerate {
       : 100
     const uiFactor = Math.max(0.5, Math.min(3.0, uiScale / 100))
     const effectiveScale = scale * uiFactor
+
+    width = Math.max(1, (width || 512) * effectiveScale)
+    height = Math.max(1, (height || 512) * effectiveScale)
 
     const backStyle = lightOrDark(backgroundColorOne)
     const nameColorArray = backStyle === 'light' ? NAME_COLORS_LIGHT : NAME_COLORS_DARK
@@ -127,8 +128,8 @@ class QuoteGenerate {
       }
     }
 
-    // Name uses canonical Telegram Desktop font size (16px at 100% UI scale).
-    const nameSize = 16 * effectiveScale
+    // Name uses canonical LyoSU font size (18px at 100% UI scale).
+    const nameSize = 18 * effectiveScale
 
     let nameCanvas
     if (message.from && message.from.name !== false && (message.from.name || message.from.first_name || message.from.last_name)) {
@@ -176,7 +177,8 @@ class QuoteGenerate {
       }
     }
 
-    const fontSize = 16 * effectiveScale
+    // Message text uses canonical LyoSU font size (24px at 100% UI scale).
+    const fontSize = 24 * effectiveScale
     let textColor = backStyle === 'light' ? '#000' : '#fff'
 
     let richContent = null
@@ -290,13 +292,14 @@ class QuoteGenerate {
           replyEntities.unshift({ type: 'media_type', offset: 0, length: normalizedReplyText.length })
         }
 
-        const replyNameFontSize = 16 * effectiveScale
+        // Reply uses canonical LyoSU font sizes (14px name, 15px text).
+        const replyNameFontSize = 14 * effectiveScale
         const replyNameCanvas = await drawMultilineText(
           normalizedReplyName, 'bold', replyNameFontSize, replyNameColor,
           0, replyNameFontSize, width * 0.9, replyNameFontSize, emojiBrand, this.telegram
         )
 
-        const replyTextFontSize = 16 * effectiveScale
+        const replyTextFontSize = 15 * effectiveScale
         const replyTextCanvas = await drawMultilineText(
           normalizedReplyText, replyEntities,
           replyTextFontSize, textColor,
@@ -412,7 +415,7 @@ class QuoteGenerate {
     let venue = null
     if (message.venue && (message.venue.title || message.venue.address)) {
       const venueMaxWidth = Math.max(1, (maxMediaSize || width * 2 / 3) - 32 * effectiveScale)
-      const venueTitleSize = 16 * effectiveScale
+      const venueTitleSize = 18 * effectiveScale
       const venueAddressSize = 14 * effectiveScale
       const venueTitle = String(message.venue.title || '')
       const venueAddress = String(message.venue.address || '')

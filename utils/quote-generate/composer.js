@@ -96,7 +96,7 @@ function drawQuote (options) {
   } = options
 
   const s = (v) => v * scale
-  const lineHeight = Math.ceil(16 * scale * 1.36)
+  const lineHeight = Math.ceil(24 * scale * 1.36)
   const accent = nameColor || background.textColor || '#fff'
 
   const mediaType = media ? media.type : null
