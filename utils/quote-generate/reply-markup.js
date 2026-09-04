@@ -7,7 +7,7 @@ const KB = {
   gap: 2 * UI_SCALE,
   padding: 10 * UI_SCALE,
   height: 36 * UI_SCALE,
-  textSize: 15 * UI_SCALE,
+  textSize: 19,
   icon: 10 * UI_SCALE,
   iconPadding: 4 * UI_SCALE,
   radiusSmall: 8 * UI_SCALE,
