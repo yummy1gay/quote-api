@@ -488,12 +488,13 @@ function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmo
     gap: s(b.gap),
     pad: { t: s(b.padY), r: s(icon ? b.padRIcon : b.padR), b: s(b.padY), l: s(b.padL) },
     bg: (ctx, n) => {
-      const solid = drawRoundRect(primary, n.w, n.h, s(b.radius), 0)
+      const cardRadius = s(b.radius)
+      const solid = drawRoundRect(primary, n.w, n.h, cardRadius, 0)
       ctx.save()
       ctx.globalAlpha = b.tint
       ctx.drawImage(solid, n.x, n.y)
       ctx.restore()
-      paintAccentBar(ctx, n, colors, s(b.bar), s(2))
+      paintAccentBar(ctx, n, colors, s(b.bar), s(2), cardRadius)
       if (backgroundEmoji || giftEmoji) {
         paintBackgroundEmoji(ctx, n, backgroundEmoji, giftEmoji, primary, icon, s)
       }
@@ -503,10 +504,15 @@ function accentBlock (s, accent, { icon = false, fillColor = null, backgroundEmo
   })
 }
 
-function paintAccentBar (ctx, n, colors, width, shift) {
+function paintAccentBar (ctx, n, colors, width, shift, cardRadius) {
   ctx.save()
+  // Clip to the card's rounded contour so the bar conforms to the corner radius
   ctx.beginPath()
-  roundedRectPath(ctx, n.x, n.y, width, n.h, width / 2)
+  roundedRectPath(ctx, n.x, n.y, n.w, n.h, cardRadius || width / 2)
+  ctx.clip()
+  // Clip to the bar width strip
+  ctx.beginPath()
+  ctx.rect(n.x, n.y, width, n.h)
   ctx.clip()
   if (colors.length < 2) {
     ctx.fillStyle = colors[0] || '#fff'

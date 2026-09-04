@@ -186,10 +186,13 @@ function decorate (canvas, options = {}) {
     ctx.stroke()
   }
   if (options.bar) {
-    ctx.fillStyle = options.bar
+    ctx.save()
     ctx.beginPath()
-    roundedRect(ctx, 0, 0, barWidth, out.height, barWidth / 2)
-    ctx.fill()
+    roundedRect(ctx, 0, 0, out.width, out.height, radius)
+    ctx.clip()
+    ctx.fillStyle = options.bar
+    ctx.fillRect(0, 0, barWidth, out.height)
+    ctx.restore()
   }
   ctx.drawImage(canvas, pad + left, pad)
   return out
@@ -529,14 +532,19 @@ async function renderQuoteBlock (block, context, depth, containsBlocks = false) 
     Math.max(1, Math.ceil(content.height + top + bottom))
   )
   const ctx = out.getContext('2d')
+  const cardRadius = 7 * s
   ctx.fillStyle = context.tint
   ctx.beginPath()
-  roundedRect(ctx, 0, 0, out.width, out.height, 7 * s)
+  roundedRect(ctx, 0, 0, out.width, out.height, cardRadius)
   ctx.fill()
-  ctx.fillStyle = context.accent
+
+  ctx.save()
   ctx.beginPath()
-  roundedRect(ctx, 0, 0, 3 * s, out.height, 1.5 * s)
-  ctx.fill()
+  roundedRect(ctx, 0, 0, out.width, out.height, cardRadius)
+  ctx.clip()
+  ctx.fillStyle = context.accent
+  ctx.fillRect(0, 0, 3 * s, out.height)
+  ctx.restore()
   paintQuoteGlyph(ctx, out.width - 5 * s, 1 * s, 18 * s, context.accent, true)
   ctx.drawImage(content, left, top)
   return out

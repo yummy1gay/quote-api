@@ -141,14 +141,19 @@ function renderCodeBlock (options) {
   const muted = options.muted || (options.dark ? '#aeb7c4' : '#66717f')
   const colors = options.dark ? DARK_COLORS : LIGHT_COLORS
 
+  const cardRadius = 5 * scale
   ctx.fillStyle = options.dark ? 'rgba(255,255,255,0.075)' : 'rgba(0,0,0,0.065)'
   ctx.beginPath()
-  roundedRect(ctx, 0, 0, out.width, out.height, 5 * scale)
+  roundedRect(ctx, 0, 0, out.width, out.height, cardRadius)
   ctx.fill()
-  ctx.fillStyle = options.dark ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.22)'
+
+  ctx.save()
   ctx.beginPath()
-  roundedRect(ctx, 0, 0, 3 * scale, out.height, 1.5 * scale)
-  ctx.fill()
+  roundedRect(ctx, 0, 0, out.width, out.height, cardRadius)
+  ctx.clip()
+  ctx.fillStyle = options.dark ? 'rgba(255,255,255,0.24)' : 'rgba(0,0,0,0.22)'
+  ctx.fillRect(0, 0, 3 * scale, out.height)
+  ctx.restore()
 
   ctx.font = `${Math.max(1, 12 * scale)}px NotoSansMono, monospace`
   ctx.textBaseline = 'alphabetic'
